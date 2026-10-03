@@ -1,0 +1,1275 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tipplerner</title>
+<style>
+  :root {
+    --bg: #f4f1ea; --panel: #fffdf8; --text: #2b2b2b; --muted: #8a8578;
+    --ok: #2e7d32; --err: #c62828; --errbg: #ffd9d6; --cur: #1565c0; --border: #ddd6c8;
+    --f1: #f8c4c4; --f2: #f9dfb0; --f3: #fff3a8; --f4: #c8ecc0; --f5: #bfe3f2; --f6: #d9cdf2; --f7: #f3c9e4; --f8: #c9d3f5;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, Segoe UI, sans-serif; background: var(--bg); color: var(--text); }
+  main { max-width: 900px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { margin: 0 0 16px; font-size: 1.6rem; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  label { font-weight: 600; display: block; margin-bottom: 6px; }
+  input[type=text], input[type=number], select { font: inherit; font-size: 1.1rem; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; width: 100%; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; margin-top: 12px; }
+  .row > div { flex: 1 1 160px; }
+  .presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); background: #fff; cursor: pointer; }
+  button:hover { background: #f0ece2; }
+  button.primary { background: var(--cur); color: #fff; border-color: var(--cur); font-weight: 600; }
+  button.primary:hover { filter: brightness(1.1); }
+  .small { font-size: .85rem; padding: 4px 10px; }
+  .hint { color: var(--muted); font-size: .9rem; margin-top: 6px; }
+  #text { font-family: Consolas, "Courier New", monospace; font-size: 1.7rem; line-height: 2.4rem; word-wrap: break-word; min-height: 7.2rem; user-select: none; }
+  #text span { border-radius: 3px; }
+  #text .done { color: var(--ok); }
+  #text .wrong { color: var(--err); background: var(--errbg); }
+  #text .todo { color: #555; }
+  #text .cursor { background: var(--cur); color: #fff; }
+  #text .space.wrong { background: var(--errbg); }
+  .stats { display: flex; gap: 24px; color: var(--muted); margin-top: 10px; font-size: .95rem; }
+  .stats b { color: var(--text); }
+  #result { text-align: center; }
+  .big { display: flex; justify-content: center; gap: 48px; flex-wrap: wrap; margin: 12px 0; }
+  .big div { font-size: 3rem; font-weight: 700; }
+  .big span { display: block; font-size: 1rem; color: var(--muted); font-weight: 400; }
+  .kb { display: flex; flex-direction: column; gap: 5px; align-items: center; margin-top: 8px; }
+  .kb .r { display: flex; gap: 5px; }
+  .kb .k { width: 42px; height: 42px; border-radius: 6px; border: 1px solid #0002; display: flex; align-items: center; justify-content: center; font-family: Consolas, monospace; font-size: 1.05rem; opacity: .35; }
+  .kb .k.on { opacity: 1; }
+  .kb .k.next { outline: 3px solid var(--cur); outline-offset: 1px; opacity: 1; font-weight: 700; }
+  .kb .k.home { text-decoration: underline; }
+  .kb .space { width: 300px; }
+  .f1 { background: var(--f1); } .f2 { background: var(--f2); } .f3 { background: var(--f3); } .f4 { background: var(--f4); }
+  .f5 { background: var(--f5); } .f6 { background: var(--f6); } .f7 { background: var(--f7); } .f8 { background: var(--f8); } .f9 { background: #ddd; }
+  .hidden { display: none !important; }
+  .modes { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .mode { flex: 1 1 150px; margin: 0; font-weight: 600; text-align: center; padding: 10px; border: 2px solid var(--border); border-radius: 10px; cursor: pointer; background: #fff; }
+  .mode input { display: none; }
+  .mode:has(input:checked) { border-color: var(--cur); background: #e8f0fb; }
+  #cv { width: 100%; display: block; border-radius: 8px; background: #000; }
+  @media (max-width: 600px) { .kb .k { width: 26px; height: 32px; font-size: .8rem; } .kb .space { width: 160px; } #text { font-size: 1.3rem; line-height: 2rem; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>⌨️ Tipplerner – 10-Finger-Training</h1>
+
+  <section class="panel" id="setup">
+    <div class="modes">
+      <label class="mode"><input type="radio" name="mode" value="train" checked> ⌨️ Training</label>
+      <label class="mode"><input type="radio" name="mode" value="balloon"> 🎈 Ballon-Spiel</label>
+      <label class="mode"><input type="radio" name="mode" value="lava"> 🌋 Lava-Spiel</label>
+      <label class="mode"><input type="radio" name="mode" value="race"> 🏎️ Autorennen</label>
+      <label class="mode"><input type="radio" name="mode" value="climb"> 🧗 Seil-Klettern</label>
+    </div>
+    <label for="keys">Erlaubte Tasten</label>
+    <input type="text" id="keys" value="asdfjklö" autocomplete="off" spellcheck="false">
+    <div class="presets">
+      <button class="small" data-keys="asdfjklö">Grundstellung</button>
+      <button class="small" data-keys="asdfghjklö">+ g h</button>
+      <button class="small" data-keys="asdfghjklöäeiru">+ e i r u</button>
+      <button class="small" data-keys="asdfghjklöäeirutzwo">+ t z w o</button>
+      <button class="small" data-keys="asdfghjklöäeirutzwoqpücnvbm">+ obere/untere Reihe</button>
+      <button class="small" data-keys="abcdefghijklmnopqrstuvwxyzäöüß">Alle Buchstaben</button>
+    </div>
+    <div class="row">
+      <div class="raceOnly">
+        <label for="raceOpp">Gegner</label>
+        <select id="raceOpp">
+          <option value="0">🐢 Langsam (6–12 WPM)</option>
+          <option value="1" selected>🐇 Mittel (12–20 WPM)</option>
+          <option value="2">🚀 Schnell (20–32 WPM)</option>
+          <option value="3">🏁 Gegen dich selbst (Schnitt &amp; Rekord)</option>
+        </select>
+      </div>
+      <div class="raceOnly">
+        <label for="raceLen">Rennlänge</label>
+        <select id="raceLen">
+          <option value="20">Kurz (20 Wörter)</option>
+          <option value="40">Mittel (40 Wörter)</option>
+          <option value="60" selected>Lang (60 Wörter)</option>
+          <option value="100">Marathon (100 Wörter)</option>
+        </select>
+      </div>
+      <div class="tempoOnly">
+        <label for="tempo">Tempo</label>
+        <select id="tempo">
+          <option value="0">🐢 Langsam</option>
+          <option value="1" selected>🐇 Mittel</option>
+          <option value="2">🚀 Schnell</option>
+        </select>
+      </div>
+      <div class="trainOnly">
+        <label for="count">Anzahl Wörter</label>
+        <input type="number" id="count" value="30" min="5" max="300">
+      </div>
+      <div class="trainOnly">
+        <label><input type="checkbox" id="stopOnError" checked> Bei Fehler stehen bleiben</label>
+        <label><input type="checkbox" id="showKb" checked> Tastatur anzeigen</label>
+      </div>
+      <div style="flex:0 0 auto"><button class="primary" id="startBtn">Start ▶</button></div>
+    </div>
+    <div class="hint" id="modeInfo"></div>
+  </section>
+
+  <section class="panel hidden" id="game">
+    <div id="text"></div>
+    <div class="stats">
+      <div>Zeit: <b id="sTime">0</b> s</div>
+      <div>WPM: <b id="sWpm">0</b></div>
+      <div>Genauigkeit: <b id="sAcc">100</b> %</div>
+      <div style="margin-left:auto"><button class="small" id="restartBtn">Neu (Esc)</button> <button class="small" id="setupBtn">Einstellungen</button></div>
+    </div>
+    <div class="hint">Einfach lostippen – die Zeit startet mit dem ersten Anschlag.</div>
+    <div class="kb" id="kb"></div>
+  </section>
+
+  <section class="panel hidden" id="arcade">
+    <canvas id="cv" width="900" height="520"></canvas>
+    <div class="stats">
+      <div class="hint" id="arcadeHint"></div>
+      <div style="margin-left:auto"><button class="small" id="arcadeBack">Einstellungen (Esc)</button></div>
+    </div>
+  </section>
+
+  <section class="panel hidden" id="result">
+    <h2>Fertig! 🎉</h2>
+    <div class="big">
+      <div id="rWpm">0<span>Wörter pro Minute (WPM)</span></div>
+      <div id="rAcc">0<span>Prozent richtig</span></div>
+    </div>
+    <p class="hint" id="rDetail"></p>
+    <button class="primary" id="againBtn">Nochmal (Enter)</button>
+    <button id="backBtn">Einstellungen</button>
+  </section>
+</main>
+
+<script>
+const WORDS = `
+der die das und in zu den mit von sich des auf für ist im dem nicht ein eine als auch es an er hat aus bei sie nach wird um am sind noch wie einem über einen so zum war haben nur oder aber vor zur bis mehr durch man sein wurde sei kann ihr dass er hatte wenn ja da dann alle also alles all als da das dass das lag lass las fass glas gas hals kahl saal sah sag sagt sage sagen jag jagd lad lade laden fad fall falls halle hall hallo hase hasen alaska salz kalk kalb ahd half fahl schal schaf schaff dash kassa aal aas ass ad faß klasse lasse lassen fassade salat sack sacken acht dach fach lack hack hacke kasse kassen fass fassen haschen asche flasche flaschen schlaf schlafen deal leas see seele sella fee feld felder held helfe helfen elf alle elle selig hele heldin klee kleid lied lieder fliege sieg siegel siegen sie die dies diese dieser fies riesig reise reisen rasse rassel ruf rufe rufen ruder rad rede reden rauf raus haus hause hausen laus maus kaufe kaufen lauf laufe laufen sauer sauber suche suchen kuchen fluss flüsse fluch gruss gruß grüße kurs kurse kurz durst lust luft lufthansa jura jahr jahre jahres jede jeder jedes jedoch ruhe ruhig still dur heil heile heilig eile eilig fülle füllen hülle küsse kuss rüssel düse kühl kühle fühlen führen führer jäger käse häkeln ärger ärgerlich säge sägen läuse häuser mäuse käfer fähre fähig häufig älter gäste hälfte äsen ölig öl löffel köder löse lösen höre hören söhne fördern öde töne
+tag tage tisch tasse taste tasten text texte tor tür türe tal tat tief tier tiere toll tolle tuch tun turm stadt staat stall stuhl stein stern strasse straße stunde sturm stur zeit zeile ziel zug zahl zahlen zahn zehn zelt zitat zu zur zwei zwar zweit zwischen wasser wald welt weit weiter wort worte wetter wiese wild wind winter woche woher wohin wolke wolle wurst wut was wer wie wo wie weg wege weil wahl wahr ware warm warte warten will wille wissen witz otto oft ofen ohr ohne ort orte rot rote rose rosa ross oder ober oben post probe pause papa paar park pilz platz preis pult pute quelle quer quiz quatsch
+mama mann mond monat morgen motor musik mut mutter name nase nacht nadel nebel neu neun nie niemals nord not nummer nur nuss nein nicht nichts nicken buch bus bau baum bein berg bild bitte blatt blau blume boot brot brief bruder bunt butter bett bier birne biene vater vogel volk voll viel viele vier von vor vorne camping cent chef chor chance computer café
+ich du er sie wir ihr es mein dein sein unser euer kein keine kann muss soll will darf mag mache machen sagen gehen gehe geht kommt kommen sehen sieht lesen liest schreiben schreibt essen isst trinken trinkt spielen spielt lernen lernt tippen tippt finger hand hände arm kopf fuß füße auge augen herz haar haare mund ohren rücken bauch knie
+hund katze pferd kuh schwein huhn ente fisch fische vogel vögel affe löwe tiger bär hase igel adler eule
+apfel birne kirsche traube zitrone banane melone tomate gurke salat karotte kartoffel zwiebel reis nudel nudeln milch käse brot ei eier zucker honig kaffee tee saft wasser suppe pizza kuchen
+schule klasse lehrer lehrerin kind kinder freund freunde freundin familie eltern bruder schwester oma opa onkel tante baby
+gut gute schön schnell langsam groß klein lang kurz alt neu jung hoch tief hell dunkel kalt warm heiß nass leicht schwer laut leise froh traurig klug dumm reich arm stark schwach früh spät
+eins zwei drei vier fünf sechs sieben acht neun zehn elf zwölf hundert tausend
+heute morgen gestern immer nie oft manchmal jetzt gleich bald schon noch hier dort oben unten links rechts vorn hinten
+auto bahn zug rad fahrrad flug schiff straße weg brücke stadt dorf land meer see fluss insel berg wald feld garten haus wohnung zimmer küche bad tür fenster dach wand boden decke lampe bett stuhl tisch sofa
+jacke hose hemd kleid rock schuh schuhe socke mütze hut tasche koffer
+spiel spiele ball tor sport team sieg glück freude angst liebe leben welt sonne mond stern himmel regen schnee wolke wind
+frage fragen antwort sache dinge bild farbe form stück teil seite ende anfang mitte grund kraft macht recht pflicht arbeit firma geld preis markt kasse
+idee ideal ideen dose hose rose lose nase vase base gase dusche fliese kiste liste lister leise reise weise wiese riese miese
+`.split(/\s+/).filter(Boolean);
+const UNIQUE_WORDS = [...new Set(WORDS)];
+
+const KB_ROWS = [
+  ['1','2','3','4','5','6','7','8','9','0','ß'],
+  ['q','w','e','r','t','z','u','i','o','p','ü'],
+  ['a','s','d','f','g','h','j','k','l','ö','ä'],
+  ['y','x','c','v','b','n','m',',','.','-'],
+];
+const FINGER = {};
+[['1qay',1],['2wsx',2],['3edc',3],['45rtfgvb',4],['67zuhjnm',5],['8ik,',6],['9ol.',7],['0ßpüöä-',8]]
+  .forEach(([chars, f]) => [...chars].forEach(c => FINGER[c] = f));
+const HOME = new Set([...'asdfjklö']);
+
+const $ = id => document.getElementById(id);
+let allowed = new Set(), target = '', pos = 0, states = [], errorsAt = new Set();
+let keystrokes = 0, correctStrokes = 0, startTime = 0, timer = null, running = false;
+
+function parseKeys() {
+  const s = $('keys').value.toLowerCase().replace(/\s/g, '');
+  return new Set([...s]);
+}
+
+function matchingWords(set) {
+  return UNIQUE_WORDS.filter(w => [...w].every(c => set.has(c)));
+}
+
+function randomWord(letters) {
+  const len = 2 + Math.floor(Math.random() * 4); // 2..5
+  let w = '';
+  for (let i = 0; i < len; i++) w += letters[Math.floor(Math.random() * letters.length)];
+  return w;
+}
+
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function updateModeInfo() {
+  const set = parseKeys();
+  const letters = [...set];
+  if (letters.length === 0) { $('modeInfo').textContent = 'Bitte mindestens eine Taste eingeben.'; return; }
+  const m = getMode();
+  document.querySelectorAll('.trainOnly').forEach(e => e.classList.toggle('hidden', m !== 'train'));
+  document.querySelectorAll('.tempoOnly').forEach(e => e.classList.toggle('hidden', m === 'train' || m === 'race'));
+  document.querySelectorAll('.raceOnly').forEach(e => e.classList.toggle('hidden', m !== 'race'));
+  if (m === 'balloon' || m === 'lava') {
+    $('modeInfo').textContent = (m === 'balloon'
+      ? '🎈 Buchstaben fallen in Ballons herunter – tippe sie, bevor sie auf die Spieße fallen! '
+      : '🌋 Deine Plattform sinkt in die Lava – tippe den Buchstaben der nächsten Plattform, um rüberzuspringen! ')
+      + 'Buchstaben: ' + gameLetters().join(' ');
+    return;
+  }
+  let pre = '';
+  if (m === 'race') {
+    pre = '🏎️ Tippe die Wörter so schnell du kannst – jeder richtige Buchstabe bringt dein Auto nach vorne. ';
+    if ($('raceOpp').value === '3') {
+      const st = myWpmStats();
+      pre += st ? `Deine Gegner: dein Schnitt (${st.avg} WPM), dein Rekord (${st.max} WPM) und Turbo (${Math.round(st.max * 1.1) + 1} WPM). `
+                : 'Du hast noch keine WPM-Ergebnisse – spiel erst ein Training oder Rennen, sonst gibt es Standardgegner. ';
+    }
+  }
+  if (m === 'climb') pre = '🧗 Mit jedem richtigen Buchstaben kletterst du höher – unten brennt das Seil! Schaffst du es bis ins Weltall? ';
+  const n = matchingWords(set).length;
+  if (n >= 15) $('modeInfo').textContent = pre + `✅ ${n} echte Wörter passen zu deinen Tasten – es werden nur echte Wörter verwendet.`;
+  else if (n > 0) $('modeInfo').textContent = pre + `ℹ️ Nur ${n} echte Wörter passen – sie werden mit zufälligen Buchstabenfolgen gemischt.`;
+  else $('modeInfo').textContent = pre + `🔤 Keine echten Wörter möglich – es werden zufällige Buchstabenfolgen (2–5 Zeichen) verwendet.`;
+}
+
+function generateText(count) {
+  allowed = parseKeys();
+  const letters = [...allowed].filter(c => c.trim());
+  const words = matchingWords(allowed);
+  count = count || Math.max(5, Math.min(300, parseInt($('count').value) || 30));
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    let w;
+    if (words.length >= 15) w = pick(words);
+    else if (words.length > 0 && Math.random() < 0.5) w = pick(words);
+    else w = randomWord(letters);
+    if (out.length && out[out.length - 1] === w && (words.length > 1 || letters.length > 1)) { i--; continue; }
+    out.push(w);
+  }
+  return out.join(' ');
+}
+
+function saveSettings() {
+  try {
+    localStorage.setItem('tipplerner', JSON.stringify({
+      keys: $('keys').value, count: $('count').value,
+      stop: $('stopOnError').checked, kb: $('showKb').checked, mode: getMode(), tempo: $('tempo').value,
+      raceOpp: $('raceOpp').value, raceLen: $('raceLen').value
+    }));
+  } catch (e) {}
+}
+function loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem('tipplerner'));
+    if (!s) return;
+    $('keys').value = s.keys ?? $('keys').value;
+    $('count').value = s.count ?? $('count').value;
+    $('stopOnError').checked = s.stop ?? true;
+    $('showKb').checked = s.kb ?? true;
+    if (s.tempo) $('tempo').value = s.tempo;
+    if (s.raceOpp) $('raceOpp').value = s.raceOpp;
+    if (s.raceLen) $('raceLen').value = s.raceLen;
+    const r = document.querySelector(`input[name=mode][value="${s.mode}"]`);
+    if (r) r.checked = true;
+  } catch (e) {}
+}
+
+function buildKeyboard() {
+  const kb = $('kb');
+  kb.innerHTML = '';
+  kb.classList.toggle('hidden', !$('showKb').checked);
+  for (const row of KB_ROWS) {
+    const r = document.createElement('div'); r.className = 'r';
+    for (const c of row) {
+      const k = document.createElement('div');
+      k.className = `k f${FINGER[c] || 9}` + (allowed.has(c) ? ' on' : '') + (HOME.has(c) ? ' home' : '');
+      k.dataset.key = c; k.textContent = c;
+      r.appendChild(k);
+    }
+    kb.appendChild(r);
+  }
+  const r = document.createElement('div'); r.className = 'r';
+  const sp = document.createElement('div'); sp.className = 'k space f9 on'; sp.dataset.key = ' '; sp.textContent = 'Leertaste';
+  r.appendChild(sp); kb.appendChild(r);
+}
+
+function highlightNext() {
+  document.querySelectorAll('.kb .next').forEach(e => e.classList.remove('next'));
+  if (pos < target.length) {
+    const el = document.querySelector(`.kb [data-key="${CSS.escape(target[pos])}"]`);
+    if (el) el.classList.add('next');
+  }
+}
+
+function render() {
+  const t = $('text');
+  let html = '';
+  for (let i = 0; i < target.length; i++) {
+    const ch = target[i] === ' ' ? '&nbsp;' : target[i];
+    let cls = i < pos ? (states[i] ? 'done' : 'wrong') : (i === pos ? 'cursor' : 'todo');
+    if (i === pos && errorsAt.has(i)) cls = 'cursor wrong';
+    if (target[i] === ' ') cls += ' space';
+    html += `<span class="${cls}">${ch}</span>`;
+    if (target[i] === ' ') html += '<wbr>';
+  }
+  t.innerHTML = html;
+  highlightNext();
+}
+
+function elapsedSec() { return startTime ? (performance.now() - startTime) / 1000 : 0; }
+
+function correctChars() { return states.slice(0, pos).filter(Boolean).length; }
+
+function wpm() {
+  const min = elapsedSec() / 60;
+  return min > 0 ? Math.round((correctChars() / 5) / min) : 0;
+}
+function accuracy() {
+  return keystrokes ? Math.round(correctStrokes / keystrokes * 1000) / 10 : 100;
+}
+
+function updateStats() {
+  $('sTime').textContent = Math.floor(elapsedSec());
+  $('sWpm').textContent = wpm();
+  $('sAcc').textContent = accuracy();
+}
+
+function start() {
+  if (parseKeys().size === 0) { updateModeInfo(); return; }
+  saveSettings();
+  target = generateText();
+  pos = 0; states = []; errorsAt = new Set();
+  keystrokes = 0; correctStrokes = 0; startTime = 0; running = true;
+  clearInterval(timer);
+  buildKeyboard();
+  stopGame();
+  $('arcade').classList.add('hidden');
+  $('setup').classList.add('hidden');
+  $('result').classList.add('hidden');
+  $('game').classList.remove('hidden');
+  render(); updateStats();
+}
+
+function finish() {
+  running = false;
+  clearInterval(timer);
+  const sec = elapsedSec();
+  $('rWpm').firstChild.textContent = wpm();
+  recordWpm(wpm());
+  $('rAcc').firstChild.textContent = accuracy().toString().replace('.', ',');
+  const words = target.split(' ').length;
+  $('rDetail').textContent =
+    `${words} Wörter · ${target.length} Zeichen in ${sec.toFixed(1)} s · ` +
+    `${keystrokes} Anschläge, davon ${keystrokes - correctStrokes} Fehler · ` +
+    `${Math.round(correctChars() / sec * 60)} Anschläge/Minute`;
+  $('game').classList.add('hidden');
+  $('result').classList.remove('hidden');
+}
+
+function showSetup() {
+  running = false; clearInterval(timer);
+  stopGame();
+  $('arcade').classList.add('hidden');
+  $('game').classList.add('hidden');
+  $('result').classList.add('hidden');
+  $('setup').classList.remove('hidden');
+  updateModeInfo();
+  $('keys').focus();
+}
+
+document.addEventListener('keydown', e => {
+  if (arcade.game) { onGameKey(e); return; }
+  const resultVisible = !$('result').classList.contains('hidden');
+  if (resultVisible && e.key === 'Enter') { e.preventDefault(); start(); return; }
+  if (!running) return;
+  if (e.key === 'Escape') { e.preventDefault(); start(); return; }
+  if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+  if (e.key === 'Backspace') {
+    e.preventDefault();
+    if (!$('stopOnError').checked && pos > 0) { pos--; states.length = pos; errorsAt.delete(pos); render(); }
+    return;
+  }
+  if (e.key.length !== 1) return;
+  e.preventDefault();
+
+  if (!startTime) {
+    startTime = performance.now();
+    timer = setInterval(updateStats, 250);
+  }
+  const typed = e.key.toLowerCase();
+  const expected = target[pos];
+  keystrokes++;
+  if (typed === expected) {
+    correctStrokes++;
+    states[pos] = !errorsAt.has(pos);
+    pos++;
+  } else if ($('stopOnError').checked) {
+    errorsAt.add(pos);
+  } else {
+    states[pos] = false;
+    pos++;
+  }
+  render(); updateStats();
+  if (pos >= target.length) finish();
+});
+
+document.querySelectorAll('[data-keys]').forEach(b => b.addEventListener('click', () => {
+  $('keys').value = b.dataset.keys; updateModeInfo();
+}));
+$('keys').addEventListener('input', updateModeInfo);
+$('keys').addEventListener('keydown', e => { if (e.key === 'Enter') launch(); });
+$('startBtn').addEventListener('click', launch);
+document.querySelectorAll('input[name=mode]').forEach(r => r.addEventListener('change', updateModeInfo));
+$('arcadeBack').addEventListener('click', showSetup);
+$('raceOpp').addEventListener('change', updateModeInfo);
+$('restartBtn').addEventListener('click', e => { e.target.blur(); start(); });
+$('againBtn').addEventListener('click', start);
+$('backBtn').addEventListener('click', showSetup);
+$('setupBtn').addEventListener('click', showSetup);
+
+/* ======================= Spiele ======================= */
+function getMode() { return (document.querySelector('input[name=mode]:checked') || {}).value || 'train'; }
+function gameLetters() { return [...parseKeys()].filter(c => c.trim()); }
+function launch() { getMode() === 'train' ? start() : startGame(getMode()); }
+
+const cv = $('cv'), ctx = cv.getContext('2d');
+const W = cv.width, H = cv.height;
+const arcade = { game: null, raf: 0, last: 0 };
+
+function pickLetter(letters, prev) {
+  if (letters.length === 1) return letters[0];
+  let c;
+  do c = pick(letters); while (c === prev);
+  return c;
+}
+
+function highscore(type, score) {
+  let best = 0;
+  try { best = parseInt(localStorage.getItem('tipplerner-hs-' + type)) || 0; } catch (e) {}
+  if (score > best) { try { localStorage.setItem('tipplerner-hs-' + type, score); } catch (e) {} }
+  return Math.max(best, score);
+}
+
+function startGame(type) {
+  const letters = gameLetters();
+  if (!letters.length) { updateModeInfo(); return; }
+  saveSettings();
+  running = false; clearInterval(timer);
+  stopGame();
+  ['setup', 'game', 'result'].forEach(id => $(id).classList.add('hidden'));
+  $('arcade').classList.remove('hidden');
+  $('arcadeHint').textContent = {
+    balloon: 'Tippe die Buchstaben in den Ballons, bevor sie auf die Spieße fallen!',
+    lava: 'Tippe den gelben Buchstaben, um auf die nächste Plattform zu springen!',
+    race: 'Tippe den Text unten ab – auch die Leerzeichen!',
+    climb: 'Tippe die Wörter, um am Seil hochzuklettern – das Feuer kommt von unten!'
+  }[type];
+  const tempo = parseInt($(type === 'race' ? 'raceOpp' : 'tempo').value) || 0;
+  const G = { balloon: BalloonGame, lava: LavaGame, race: RaceGame, climb: ClimbGame }[type];
+  arcade.game = new G(letters, tempo);
+  arcade.game.type = type;
+  arcade.game.tempo = tempo;
+  arcade.last = performance.now();
+  arcade.raf = requestAnimationFrame(loop);
+  document.activeElement && document.activeElement.blur();
+}
+
+function stopGame() {
+  cancelAnimationFrame(arcade.raf);
+  arcade.game = null;
+}
+
+function loop(now) {
+  const g = arcade.game;
+  if (!g) return;
+  const dt = Math.min(0.05, (now - arcade.last) / 1000);
+  arcade.last = now;
+  if (g.over) g.overT += dt; else g.update(dt);
+  updateParticles(g.parts, dt);
+  g.draw();
+  drawParticles(g.parts);
+  if (g.over) drawGameOver(g);
+  arcade.raf = requestAnimationFrame(loop);
+}
+
+function onGameKey(e) {
+  const g = arcade.game;
+  if (e.key === 'Escape') { e.preventDefault(); showSetup(); return; }
+  if (e.ctrlKey || e.altKey || e.metaKey) return;
+  if (g.over) {
+    if (e.key === 'Enter' && g.overT > 0.4) { e.preventDefault(); startGame(g.type); }
+    return;
+  }
+  if (e.key.length !== 1) return;
+  e.preventDefault();
+  if (e.key === ' ' && !g.wantsSpace) return;
+  g.key(e.key.toLowerCase());
+}
+
+/* ---- Partikel ---- */
+function burst(parts, x, y, color, n, speed) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, s = speed * (0.4 + Math.random() * 0.8);
+    parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.6 + Math.random() * 0.4, color, size: 3 + Math.random() * 4 });
+  }
+}
+function floatText(parts, x, y, text, color) {
+  parts.push({ x, y, vx: 0, vy: -50, life: 0.9, color, text });
+}
+function updateParticles(parts, dt) {
+  for (const p of parts) {
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    if (!p.text) p.vy += 300 * dt;
+    p.life -= dt;
+  }
+  for (let i = parts.length - 1; i >= 0; i--) if (parts[i].life <= 0) parts.splice(i, 1);
+}
+function drawParticles(parts) {
+  for (const p of parts) {
+    ctx.globalAlpha = Math.max(0, Math.min(1, p.life * 1.5));
+    ctx.fillStyle = p.color;
+    if (p.text) {
+      ctx.font = 'bold 26px system-ui, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(p.text, p.x - (p.cam || 0), p.y);
+    } else {
+      ctx.fillRect(p.x - (p.cam || 0) - p.size / 2, p.y - p.size / 2, p.size, p.size);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+function accOf(g) { return g.keys ? Math.round(g.hits / g.keys * 100) : 100; }
+
+function drawHud(g, extra) {
+  ctx.fillStyle = 'rgba(0,0,0,.35)';
+  ctx.fillRect(0, 0, W, 40);
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 20px system-ui, sans-serif'; ctx.textAlign = 'left';
+  ctx.fillText(`Punkte: ${g.score}`, 14, 27);
+  ctx.fillText(`Genauigkeit: ${accOf(g)} %`, 170, 27);
+  ctx.textAlign = 'right';
+  ctx.fillText(extra, W - 14, 27);
+  if (g.flash > 0) {
+    ctx.fillStyle = `rgba(255,0,0,${g.flash})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+}
+
+function drawGameOver(g) {
+  const hsKey = g.type + '-' + g.tempo;
+  if (g.best === undefined) { g.best = highscore(hsKey, 0); highscore(hsKey, g.score); }
+  ctx.fillStyle = 'rgba(0,0,0,.65)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+  ctx.font = 'bold 56px system-ui, sans-serif';
+  ctx.fillText(g.title(), W / 2, 150);
+  ctx.font = '28px system-ui, sans-serif';
+  const min = g.t / 60;
+  const lines = g.lines ? g.lines(Math.max(g.best, g.score)) : [
+    `Punkte: ${g.score}   (Rekord: ${Math.max(g.best, g.score)})`,
+    `Genauigkeit: ${accOf(g)} %   (${g.keys - g.hits} Fehler)`,
+    `${min > 0 ? Math.round(g.hits / min) : 0} richtige Anschläge pro Minute`];
+  lines.forEach((l, i) => ctx.fillText(l, W / 2, 230 + i * 45));
+  if (g.score > g.best) {
+    ctx.fillStyle = '#ffd54f'; ctx.font = 'bold 30px system-ui, sans-serif';
+    ctx.fillText('🏆 Neuer Rekord!', W / 2, 370);
+  }
+  ctx.fillStyle = '#ccc'; ctx.font = '22px system-ui, sans-serif';
+  ctx.fillText('Enter = nochmal   ·   Esc = Einstellungen', W / 2, 440);
+}
+
+/* ---- Ballon-Spiel ---- */
+const BALLOON_COLORS = ['#e53935', '#1e88e5', '#43a047', '#fb8c00', '#8e24aa', '#00acc1', '#d81b60', '#fdd835'];
+const SPIKE_H = 34, BR = 28;
+
+class BalloonGame {
+  constructor(letters, tempo) {
+    this.cfg = [{ v: 25, dv: 0.6, iv: 2.6, div: 0.012, min: 0.9 },
+                { v: 38, dv: 1.0, iv: 2.0, div: 0.016, min: 0.65 },
+                { v: 50, dv: 1.4, iv: 1.6, div: 0.02, min: 0.5 }][tempo];
+    this.letters = letters; this.balloons = []; this.parts = [];
+    this.t = 0; this.spawnT = 1; this.lives = 5; this.score = 0; this.keys = 0; this.hits = 0;
+    this.over = false; this.overT = 0; this.flash = 0; this.prev = null;
+    this.clouds = Array.from({ length: 6 }, () => ({ x: Math.random() * W, y: 60 + Math.random() * 250, s: 0.6 + Math.random() * 0.9 }));
+  }
+  speed() { return this.cfg.v + this.t * this.cfg.dv; }
+  interval() { return Math.max(this.cfg.min, this.cfg.iv - this.t * this.cfg.div); }
+  title() { return 'Alle Ballons geplatzt!'; }
+  update(dt) {
+    this.t += dt;
+    this.flash = Math.max(0, this.flash - dt);
+    for (const c of this.clouds) { c.x += 12 * c.s * dt; if (c.x > W + 100) c.x = -100; }
+    this.spawnT -= dt;
+    if (this.spawnT <= 0) {
+      this.spawnT = this.interval();
+      const ch = pickLetter(this.letters, this.prev); this.prev = ch;
+      this.balloons.push({
+        x: 50 + Math.random() * (W - 100), y: -60, ch, color: pick(BALLOON_COLORS),
+        sway: Math.random() * 6.28, v: this.speed() * (0.85 + Math.random() * 0.3)
+      });
+    }
+    for (const b of this.balloons) { b.y += b.v * dt; b.sway += dt * 2; }
+    this.balloons = this.balloons.filter(b => {
+      if (b.y + BR * 1.15 < H - SPIKE_H + 6) return true;
+      const x = this.bx(b);
+      burst(this.parts, x, b.y, b.color, 25, 220);
+      floatText(this.parts, x, b.y - 30, 'PENG!', '#fff');
+      this.lives--; this.flash = 0.35;
+      return false;
+    });
+    if (this.lives <= 0) this.over = true;
+  }
+  bx(b) { return b.x + Math.sin(b.sway) * 10; }
+  key(ch) {
+    this.keys++;
+    const c = this.balloons.filter(b => b.ch === ch);
+    if (!c.length) { this.flash = 0.25; return; }
+    const b = c.reduce((a, o) => o.y > a.y ? o : a);
+    this.balloons.splice(this.balloons.indexOf(b), 1);
+    this.hits++; this.score++;
+    burst(this.parts, this.bx(b), b.y, b.color, 18, 160);
+    floatText(this.parts, this.bx(b), b.y - 20, '+1', '#2e7d32');
+  }
+  draw() {
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, '#6ec6ff'); sky.addColorStop(1, '#e3f4ff');
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(255,255,255,.85)';
+    for (const c of this.clouds) {
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, 22 * c.s, 0, 7); ctx.arc(c.x + 25 * c.s, c.y - 10 * c.s, 28 * c.s, 0, 7); ctx.arc(c.x + 55 * c.s, c.y, 22 * c.s, 0, 7);
+      ctx.fill();
+    }
+    for (const b of this.balloons) {
+      const x = this.bx(b);
+      ctx.strokeStyle = '#555'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(x, b.y + BR * 1.15);
+      ctx.quadraticCurveTo(x - 8, b.y + BR * 1.15 + 20, x, b.y + BR * 1.15 + 40); ctx.stroke();
+      ctx.fillStyle = b.color;
+      ctx.beginPath(); ctx.ellipse(x, b.y, BR, BR * 1.15, 0, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x - 6, b.y + BR * 1.15 + 6); ctx.lineTo(x + 6, b.y + BR * 1.15 + 6); ctx.lineTo(x, b.y + BR * 1.15 - 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.35)';
+      ctx.beginPath(); ctx.ellipse(x - 9, b.y - 12, 6, 10, -0.5, 0, 7); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 30px Consolas, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(b.ch, x, b.y + 2);
+      ctx.textBaseline = 'alphabetic';
+    }
+    // Spieße
+    ctx.fillStyle = '#5d4037'; ctx.fillRect(0, H - 10, W, 10);
+    for (let x = 0; x < W; x += 24) {
+      const g = ctx.createLinearGradient(x, 0, x + 24, 0);
+      g.addColorStop(0, '#9e9e9e'); g.addColorStop(0.5, '#eeeeee'); g.addColorStop(1, '#757575');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.moveTo(x, H - 10); ctx.lineTo(x + 12, H - 10 - SPIKE_H); ctx.lineTo(x + 24, H - 10); ctx.fill();
+    }
+    drawHud(this, '❤️'.repeat(Math.max(0, this.lives)) + '🖤'.repeat(5 - Math.max(0, this.lives)));
+  }
+}
+
+/* ---- Lava-Spiel ---- */
+const LAVA_Y = 430, PLAT_W = 120, PLAT_H = 30, GAP = 200;
+
+class LavaGame {
+  constructor(letters, tempo) {
+    // Sekunden bis eine Plattform versunken ist: Start, Minimum, Verkürzung pro Plattform
+    this.cfg = [{ start: 10, min: 4, step: 0.05 },
+                { start: 7, min: 3, step: 0.05 },
+                { start: 5, min: 2, step: 0.06 }][tempo];
+    this.letters = letters; this.plats = []; this.parts = [];
+    this.cur = 0; this.vis = 0; this.jump = null; this.cam = 0;
+    this.t = 0; this.score = 0; this.keys = 0; this.hits = 0; this.flash = 0;
+    this.started = false; this.dying = 0; this.over = false; this.overT = 0;
+    for (let i = 0; i < 8; i++) this.addPlat();
+    this.plats[0].ch = '';
+  }
+  addPlat() {
+    const i = this.plats.length, prev = this.plats[i - 1];
+    this.plats.push({ x: 120 + i * GAP, y: i ? 280 + Math.random() * 70 : 310, ch: pickLetter(this.letters, prev && prev.ch), sink: 0 });
+  }
+  top(p) { return p.y + p.sink * (LAVA_Y + 12 - p.y); }
+  sinkTime() { return Math.max(this.cfg.min, this.cfg.start - this.score * this.cfg.step); }
+  title() { return 'Ab in die Lava!'; }
+  playerPos() {
+    if (this.jump) {
+      const a = this.plats[this.jump.from], b = this.plats[this.jump.to], t = this.jump.t;
+      return { x: a.x + (b.x - a.x) * t, y: this.top(a) + (this.top(b) - this.top(a)) * t - Math.sin(Math.PI * t) * 70, air: true };
+    }
+    const p = this.plats[this.vis];
+    return { x: p.x, y: this.top(p) + this.dying * 60, air: false };
+  }
+  update(dt) {
+    if (this.started) this.t += dt;
+    this.flash = Math.max(0, this.flash - dt);
+    while (this.plats.length < this.cur + 8) this.addPlat();
+    for (let i = 0; i <= this.cur; i++) {
+      const p = this.plats[i];
+      if (i < this.cur || this.started) p.sink = Math.min(1.4, p.sink + dt / this.sinkTime());
+    }
+    if (!this.jump && this.vis < this.cur) this.jump = { from: this.vis, to: this.vis + 1, t: 0 };
+    if (this.jump) {
+      this.jump.t += dt / 0.28;
+      if (this.jump.t >= 1) {
+        this.vis = this.jump.to; this.jump = null;
+        const p = this.plats[this.vis];
+        burst(this.parts, p.x, this.top(p), '#bcaaa4', 8, 90);
+      }
+    }
+    if (!this.jump && this.plats[this.vis].sink >= 1) {
+      if (this.dying === 0) {
+        const pp = this.playerPos();
+        burst(this.parts, pp.x, LAVA_Y, '#ff9800', 40, 260);
+      }
+      this.dying += dt;
+      if (Math.random() < 0.5) { const pp = this.playerPos(); burst(this.parts, pp.x, LAVA_Y, '#ffeb3b', 2, 150); }
+      if (this.dying > 1.2) this.over = true;
+    }
+    const target = this.playerPos().x - 220;
+    this.cam += (target - this.cam) * Math.min(1, dt * 5);
+    for (const p of this.parts) p.cam = this.cam;
+  }
+  key(ch) {
+    if (this.dying) return;
+    this.keys++;
+    const next = this.plats[this.cur + 1];
+    if (ch === next.ch) {
+      this.hits++; this.cur++; this.score++; this.started = true;
+    } else {
+      this.flash = 0.3;
+      if (this.started) this.plats[this.cur].sink = Math.min(1, this.plats[this.cur].sink + 0.04);
+    }
+  }
+  draw() {
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#1a0d0d'); bg.addColorStop(0.7, '#4a1408'); bg.addColorStop(1, '#8a2a0a');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    // Vulkane im Hintergrund
+    ctx.fillStyle = '#2b1510';
+    for (let i = -1; i < 4; i++) {
+      const x = i * 400 - (this.cam * 0.3) % 400;
+      ctx.beginPath(); ctx.moveTo(x, LAVA_Y); ctx.lineTo(x + 150, 200); ctx.lineTo(x + 200, 200); ctx.lineTo(x + 350, LAVA_Y); ctx.fill();
+    }
+    // Plattformen
+    for (let i = Math.max(0, this.vis - 3); i < this.plats.length; i++) {
+      const p = this.plats[i], x = p.x - this.cam, y = this.top(p);
+      if (x < -200 || x > W + 200) continue;
+      const heat = Math.min(1, p.sink);
+      ctx.fillStyle = `rgb(${110 + heat * 120},${100 - heat * 50},${95 - heat * 60})`;
+      ctx.fillRect(x - PLAT_W / 2, y, PLAT_W, PLAT_H);
+      ctx.fillStyle = 'rgba(0,0,0,.25)';
+      ctx.fillRect(x - PLAT_W / 2, y + PLAT_H - 8, PLAT_W, 8);
+      if (p.ch && i > this.cur) {
+        const isNext = i === this.cur + 1;
+        ctx.fillStyle = isNext ? '#ffeb3b' : 'rgba(255,255,255,.55)';
+        ctx.font = `bold ${isNext ? 46 : 32}px Consolas, monospace`; ctx.textAlign = 'center';
+        ctx.fillText(p.ch, x, y - (isNext ? 20 : 14));
+      }
+    }
+    this.drawPlayer();
+    // Lava
+    const lava = ctx.createLinearGradient(0, LAVA_Y, 0, H);
+    lava.addColorStop(0, '#ff9800'); lava.addColorStop(0.3, '#f4511e'); lava.addColorStop(1, '#b71c1c');
+    ctx.fillStyle = lava;
+    ctx.beginPath(); ctx.moveTo(0, H);
+    for (let x = 0; x <= W; x += 10) ctx.lineTo(x, LAVA_Y + Math.sin((x + this.cam) / 40 + performance.now() / 400) * 5);
+    ctx.lineTo(W, H); ctx.fill();
+    // Sink-Anzeige
+    const s = Math.min(1, this.plats[this.cur].sink);
+    ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(W / 2 - 100, 52, 200, 12);
+    ctx.fillStyle = s > 0.7 ? '#f44336' : '#ffc107'; ctx.fillRect(W / 2 - 100, 52, 200 * s, 12);
+    if (!this.started) {
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 26px system-ui, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('Tippe den gelben Buchstaben zum Springen!', W / 2, 120);
+    }
+    drawHud(this, `Plattformen: ${this.score}`);
+  }
+  drawPlayer() {
+    const p = this.playerPos(), x = p.x - this.cam, y = p.y;
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    ctx.fillStyle = '#ffcc80';
+    ctx.beginPath(); ctx.arc(x, y - 52, 10, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#42a5f5';
+    ctx.beginPath(); ctx.moveTo(x, y - 42); ctx.lineTo(x, y - 20); ctx.stroke();
+    ctx.strokeStyle = '#ffcc80';
+    ctx.beginPath();
+    if (p.air || this.dying) { ctx.moveTo(x - 14, y - 50); ctx.lineTo(x, y - 36); ctx.lineTo(x + 14, y - 50); }
+    else { ctx.moveTo(x - 12, y - 24); ctx.lineTo(x, y - 36); ctx.lineTo(x + 12, y - 24); }
+    ctx.stroke();
+    ctx.strokeStyle = '#37474f';
+    ctx.beginPath();
+    if (p.air) { ctx.moveTo(x - 10, y - 8); ctx.lineTo(x, y - 20); ctx.lineTo(x + 10, y - 8); }
+    else { ctx.moveTo(x - 8, y); ctx.lineTo(x, y - 20); ctx.lineTo(x + 8, y); }
+    ctx.stroke();
+  }
+}
+
+/* ---- Gemeinsames für Text-Spiele ---- */
+function wpmHistory() {
+  try { return JSON.parse(localStorage.getItem('tipplerner-wpm')) || []; } catch (e) { return []; }
+}
+function recordWpm(w) {
+  if (!(w > 0)) return;
+  const h = wpmHistory(); h.push(w);
+  try { localStorage.setItem('tipplerner-wpm', JSON.stringify(h.slice(-50))); } catch (e) {}
+}
+function myWpmStats() {
+  const h = wpmHistory();
+  if (!h.length) return null;
+  const last = h.slice(-10);
+  return { avg: Math.round(last.reduce((a, b) => a + b, 0) / last.length), max: Math.max(...h) };
+}
+
+const TEXT_Y = 432;
+function drawTypingBox(g) {
+  ctx.fillStyle = '#fffdf8'; ctx.beginPath(); ctx.roundRect(20, TEXT_Y, W - 40, 76, 10); ctx.fill();
+  ctx.font = '32px Consolas, monospace'; ctx.textAlign = 'left';
+  const cw = ctx.measureText('m').width, n = Math.floor((W - 80) / cw);
+  const from = Math.max(0, Math.min(g.pos - 10, g.text.length - n));
+  for (let i = from; i < Math.min(g.text.length, from + n); i++) {
+    const x = 40 + (i - from) * cw, y = TEXT_Y + 50;
+    let ch = g.text[i];
+    if (i === g.pos) {
+      ctx.fillStyle = g.err ? '#c62828' : '#1565c0';
+      ctx.fillRect(x - 1, y - 30, cw + 2, 40);
+      ctx.fillStyle = '#fff';
+      if (ch === ' ') ch = '␣';
+    } else ctx.fillStyle = i < g.pos ? '#2e7d32' : '#444';
+    ctx.fillText(ch, x, y);
+  }
+}
+function topBar(left, right) {
+  ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(0, 0, W, 40);
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 20px system-ui, sans-serif'; ctx.textAlign = 'left';
+  ctx.fillText(left, 14, 27);
+  ctx.textAlign = 'right';
+  ctx.fillText(right, W - 14, 27);
+}
+function lerpColor(stops, n) {
+  if (n <= stops[0][0]) return `rgb(${stops[0][1]})`;
+  for (let i = 1; i < stops.length; i++) if (n <= stops[i][0]) {
+    const [a, ca] = stops[i - 1], [b, cb] = stops[i], f = (n - a) / (b - a);
+    return `rgb(${ca.map((v, k) => Math.round(v + (cb[k] - v) * f))})`;
+  }
+  return `rgb(${stops[stops.length - 1][1]})`;
+}
+
+/* ---- Autorennen (vertikal) ---- */
+const LANE_W = 95, ROAD_X = 160, CAR_SY = 330, PX_PER_CHAR = 36;
+function laneX(l) { return ROAD_X + LANE_W * (l + 0.5); }
+
+class RaceGame {
+  constructor(letters, opp) {
+    this.wantsSpace = true;
+    this.text = generateText(parseInt($('raceLen').value) || 60);
+    this.trackLen = this.text.length * PX_PER_CHAR;
+    this.pos = 0; this.err = false; this.parts = [];
+    this.keys = 0; this.hits = 0; this.score = 0; this.t = 0; this.count = 3;
+    this.flash = 0; this.over = false; this.overT = 0; this.place = 0;
+    let wpms = [[6, 9, 12], [12, 16, 20], [20, 26, 32]][opp] || [10, 15, 20];
+    let names = ['Robo', 'Blitz', 'Turbo'];
+    this.info = `Gegner: ${wpms.join(' / ')} WPM`;
+    if (opp === 3) {
+      const s = myWpmStats();
+      if (s) {
+        wpms = [s.avg, s.max, Math.round(s.max * 1.1) + 1];
+        names = ['Ø-Du', 'Rekord-Du', 'Turbo'];
+        this.info = `Dein Schnitt ${s.avg} · Rekord ${s.max} WPM`;
+      } else this.info = 'Noch keine eigenen Werte – Standardgegner';
+    }
+    const colors = ['#8e24aa', '#fb8c00', '#43a047'], lanes = [0, 2, 3];
+    this.player = { name: 'Du', color: '#e53935', lane: 1, x: laneX(1), d: 0 };
+    this.bots = wpms.map((w, i) => ({
+      name: names[i], wpm: Math.max(3, w), color: colors[i], lane: lanes[i], x: laneX(lanes[i]),
+      d: 0, f: 1, done: false, laneT: 2 + Math.random() * 4
+    }));
+    this.cars = [this.player, ...this.bots];
+  }
+  wpmNow() { const min = this.t / 60; return min > 0 ? Math.round(this.pos / 5 / min) : 0; }
+  laneFree(car, lane) {
+    return this.cars.every(c => c === car ||
+      !((c.lane === lane || Math.abs(c.x - laneX(lane)) < 70) && Math.abs(c.d - car.d) < 130));
+  }
+  update(dt) {
+    this.flash = Math.max(0, this.flash - dt);
+    this.player.d += (this.pos * PX_PER_CHAR - this.player.d) * Math.min(1, dt * 10);
+    if (this.count > 0) { this.count -= dt; return; }
+    this.t += dt;
+    for (const b of this.bots) {
+      b.f = Math.max(0.8, Math.min(1.2, b.f + (Math.random() - 0.5) * dt * 2));
+      if (b.d < this.trackLen + 250) b.d += b.wpm * 5 / 60 * PX_PER_CHAR * b.f * dt;
+      if (b.d >= this.trackLen) b.done = true;
+      // Spurwechsel: zufällig oder wenn jemand direkt vorne fährt
+      b.laneT -= dt;
+      const settled = Math.abs(b.x - laneX(b.lane)) < 3;
+      const blocked = this.cars.some(c => c !== b && Math.abs(c.x - b.x) < 60 && c.d > b.d && c.d - b.d < 140);
+      if (settled && !b.done && (b.laneT <= 0 || blocked)) {
+        const opts = [b.lane - 1, b.lane + 1].filter(l => l >= 0 && l < 4 && this.laneFree(b, l));
+        if (opts.length) { b.lane = pick(opts); b.laneT = 2 + Math.random() * 5; }
+        else b.laneT = 0.5;
+      }
+      const dx = laneX(b.lane) - b.x;
+      b.x += Math.sign(dx) * Math.min(Math.abs(dx), 110 * dt);
+    }
+  }
+  key(ch) {
+    if (this.count > 0) return;
+    this.keys++;
+    if (ch === this.text[this.pos]) {
+      this.hits++; this.pos++; this.err = false;
+      if (this.pos >= this.text.length) {
+        this.place = 1 + this.bots.filter(b => b.done).length;
+        this.score = this.wpmNow();
+        recordWpm(this.score);
+        this.over = true;
+      }
+    } else {
+      this.err = true; this.flash = 0.15;
+    }
+  }
+  title() { return this.place === 1 ? '🏆 1. Platz – Gewonnen!' : `${this.place}. Platz`; }
+  lines(best) {
+    return [`${this.score} WPM   (Rekord: ${best} WPM)`,
+            `Genauigkeit: ${accOf(this)} %   (${this.keys - this.hits} Fehler)`,
+            `Zeit: ${this.t.toFixed(1).replace('.', ',')} s`];
+  }
+  sy(d) { return CAR_SY - (d - this.player.d); }
+  drawCar(c) {
+    const x = c.x, y = this.sy(c.d);
+    if (y < -60 || y > TEXT_Y + 60) return;
+    ctx.fillStyle = '#222';
+    for (const dx of [-21, 15]) for (const dy of [-24, 12]) ctx.fillRect(x + dx, y + dy, 6, 14);
+    ctx.fillStyle = c.color;
+    ctx.beginPath(); ctx.roundRect(x - 17, y - 32, 34, 64, 9); ctx.fill();
+    ctx.fillStyle = 'rgba(200,230,255,.9)';
+    ctx.fillRect(x - 12, y - 18, 24, 11);
+    ctx.fillStyle = 'rgba(0,0,0,.25)';
+    ctx.fillRect(x - 12, y + 14, 24, 8);
+    ctx.fillStyle = '#ffeb3b';
+    ctx.fillRect(x - 14, y - 32, 7, 4); ctx.fillRect(x + 7, y - 32, 7, 4);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 14px system-ui, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(c.name, x, y + 48);
+  }
+  draw() {
+    const off = this.player.d;
+    ctx.fillStyle = '#4caf50'; ctx.fillRect(0, 0, W, H);
+    // Bäume am Rand
+    for (let k = Math.floor((off - 600) / 110); k < (off + 500) / 110; k++) {
+      const y = this.sy(k * 110), r = Math.abs(Math.sin(k * 12.9898) * 43758.5) % 1;
+      for (const x of [20 + r * 100, ROAD_X + 4 * LANE_W + 25 + r * 20]) {
+        ctx.fillStyle = '#2e7d32'; ctx.beginPath(); ctx.arc(x, y, 16 + r * 8, 0, 7); ctx.fill();
+        ctx.fillStyle = '#1b5e20'; ctx.beginPath(); ctx.arc(x - 4, y - 4, 8 + r * 4, 0, 7); ctx.fill();
+      }
+    }
+    // Straße
+    ctx.fillStyle = '#555'; ctx.fillRect(ROAD_X, 0, LANE_W * 4, H);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(ROAD_X + 4, 0, 4, H); ctx.fillRect(ROAD_X + LANE_W * 4 - 8, 0, 4, H);
+    const dash = ((off % 60) + 60) % 60;
+    for (let i = 1; i < 4; i++)
+      for (let y = dash - 60; y < H; y += 60) ctx.fillRect(ROAD_X + i * LANE_W - 2, y, 4, 30);
+    // Start- und Ziellinie
+    const st = this.sy(0);
+    if (st > -10 && st < H) { ctx.fillStyle = '#fff'; ctx.fillRect(ROAD_X, st + 34, LANE_W * 4, 6); }
+    const fy = this.sy(this.trackLen) - 34;
+    if (fy > -30 && fy < H)
+      for (let x = 0; x < LANE_W * 4; x += 12)
+        for (let r = 0; r < 2; r++) {
+          ctx.fillStyle = ((x / 12 + r) % 2) ? '#000' : '#fff';
+          ctx.fillRect(ROAD_X + x, fy + r * 12, 12, 12);
+        }
+    for (const b of this.bots) this.drawCar(b);
+    this.drawCar(this.player);
+    // Pfeile für Autos außerhalb des Bildes
+    ctx.font = 'bold 13px system-ui, sans-serif'; ctx.textAlign = 'center';
+    for (const b of this.bots) {
+      const y = this.sy(b.d);
+      if (y >= -40 && y <= TEXT_Y + 40) continue;
+      const top = y < 0, ay = top ? 52 : TEXT_Y - 14;
+      ctx.fillStyle = b.color;
+      ctx.beginPath();
+      if (top) { ctx.moveTo(b.x, ay - 10); ctx.lineTo(b.x - 9, ay + 4); ctx.lineTo(b.x + 9, ay + 4); }
+      else { ctx.moveTo(b.x, ay + 10); ctx.lineTo(b.x - 9, ay - 4); ctx.lineTo(b.x + 9, ay - 4); }
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.fillText(`${b.name} ${Math.round(Math.abs(b.d - this.player.d) / PX_PER_CHAR)}`, b.x, top ? ay + 18 : ay - 8);
+    }
+    // Rangliste
+    const px = 610;
+    ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.beginPath(); ctx.roundRect(px, 52, 270, 300, 10); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 18px system-ui, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('Rangliste', px + 14, 78);
+    [...this.cars].sort((a, b) => b.d - a.d).forEach((c, i) => {
+      const y = 112 + i * 58, prog = Math.min(1, c.d / this.trackLen);
+      ctx.fillStyle = c.color; ctx.beginPath(); ctx.arc(px + 22, y - 6, 8, 0, 7); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.font = (c === this.player ? 'bold ' : '') + '17px system-ui, sans-serif';
+      ctx.textAlign = 'left'; ctx.fillText(`${i + 1}. ${c.name}`, px + 38, y);
+      ctx.textAlign = 'right';
+      ctx.fillText(c === this.player ? `${this.wpmNow()} WPM` : `${c.wpm} WPM`, px + 256, y);
+      ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(px + 14, y + 10, 242, 8);
+      ctx.fillStyle = c.color; ctx.fillRect(px + 14, y + 10, 242 * prog, 8);
+    });
+    drawTypingBox(this);
+    topBar(`WPM: ${this.wpmNow()}   ·   Genauigkeit: ${accOf(this)} %`, this.info);
+    if (this.count > 0 || this.t < 0.7) {
+      ctx.fillStyle = this.count > 0 ? '#fff' : '#ffeb3b';
+      ctx.font = 'bold 110px system-ui, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(this.count > 0 ? Math.ceil(this.count) : 'LOS!', ROAD_X + LANE_W * 2, 230);
+    }
+    if (this.flash > 0) { ctx.fillStyle = `rgba(255,0,0,${this.flash})`; ctx.fillRect(0, 0, W, H); }
+  }
+}
+
+/* ---- Seil-Klettern ---- */
+const CLIMB_PX = 14, CLIMB_SY = 300, ROPE_X = 330, CLIMB_START = 6;
+// Kletter-Buchstaben → angezeigte Höhe in Metern
+const ALT = [[0, 0], [25, 30], [80, 300], [140, 2500], [210, 11000], [270, 80000], [330, 400000]];
+function altitude(n) {
+  if (n <= 0) return 0;
+  for (let i = 1; i < ALT.length; i++) if (n <= ALT[i][0]) {
+    const [a, am] = ALT[i - 1], [b, bm] = ALT[i];
+    return am + (bm - am) * (n - a) / (b - a);
+  }
+  return 400000 + (n - 330) * 3000;
+}
+function fmtAlt(m) {
+  return m >= 10000 ? (m / 1000).toFixed(m >= 100000 ? 0 : 1).replace('.', ',') + ' km' : Math.round(m) + ' m';
+}
+function zoneName(n) {
+  return n < 25 ? 'Über der Wiese' : n < 80 ? 'Bei den Vögeln' : n < 140 ? 'In den Wolken'
+       : n < 210 ? 'Bei den Flugzeugen' : n < 270 ? 'Am Rand des Weltalls' : 'Im Weltall bei der ISS';
+}
+const SKY = [[0, [135, 206, 235]], [80, [95, 168, 224]], [140, [59, 127, 209]], [210, [27, 58, 138]], [270, [8, 12, 36]], [330, [0, 0, 6]]];
+
+class ClimbGame {
+  constructor(letters, tempo) {
+    this.wantsSpace = true;
+    // Feuer-Tempo in Buchstaben pro Sekunde: Start + Zuwachs pro Sekunde (ohne Obergrenze)
+    this.cfg = [{ v: 0.6, ramp: 0.009 }, { v: 1.0, ramp: 0.013 }, { v: 1.5, ramp: 0.018 }][tempo];
+    this.text = generateText(40);
+    this.pos = 0; this.err = false; this.parts = [];
+    this.keys = 0; this.hits = 0; this.score = 0; this.t = 0; this.time = 0;
+    this.flash = 0; this.over = false; this.overT = 0;
+    this.started = false; this.fire = 0; this.h = CLIMB_START; this.hv = CLIMB_START; this.fallT = 0;
+    this.lastHit = 0; this.sliding = false;
+    this.objs = []; this.spawnedTo = 0; this.nextIss = 290;
+    this.stars = Array.from({ length: 140 }, () => ({ x: Math.random() * W, y: Math.random() * H, r: Math.random() * 1.6 + 0.4, p: Math.random() * 6 }));
+  }
+  climberN() { return this.h; }
+  climbed() { return Math.max(0, this.h - CLIMB_START); }
+  sy(n) { return CLIMB_SY - (n - this.hv) * CLIMB_PX; }
+  wpmNow() { const min = this.t / 60; return min > 0 ? Math.round(this.pos / 5 / min) : 0; }
+  spawnAt(h) {
+    const add = (type, vx, extra) => this.objs.push(Object.assign({
+      type, n: h + Math.random() * 4, x: Math.random() * W,
+      vx: (Math.random() < 0.5 ? -1 : 1) * vx * (0.7 + Math.random() * 0.6), ph: Math.random() * 6
+    }, extra));
+    if (h > 15 && h < 95 && Math.random() < 0.45) add('bird', 70);
+    if (h > 65 && h < 155 && Math.random() < 0.55) add('cloud', 12, { s: 0.8 + Math.random() });
+    if (h > 135 && h < 240 && Math.random() < 0.22) add('plane', 160);
+    if (h > 250 && Math.random() < 0.1) add('sat', 40);
+    if (h > 280 && h >= this.nextIss) { this.nextIss = h + 70; add('iss', 45); }
+  }
+  update(dt) {
+    this.time += dt;
+    this.flash = Math.max(0, this.flash - dt);
+    if (this.pos > this.text.length - 60) this.text += ' ' + generateText(30);
+    const n = this.climberN();
+    if (this.fallT > 0) {
+      this.fallT += dt;
+      if (this.fallT > 1.6) this.over = true;
+    } else {
+      this.hv += (n - this.hv) * Math.min(1, dt * 10);
+      if (this.started) {
+        this.t += dt;
+        // Wer nicht tippt, rutscht langsam (und dann immer schneller) am Seil runter
+        const slide = Math.max(0, Math.min(4, (this.time - this.lastHit - 0.7) * 2));
+        this.sliding = slide > 0;
+        this.h = Math.max(1, this.h - slide * dt);
+        const gap = n - this.fire;
+        this.fire += (this.cfg.v + this.cfg.ramp * this.t + Math.max(0, gap - 25) * 0.15) * dt;
+        if (this.fire >= this.hv - 0.5) {
+          this.fallT = 0.001;
+          if (this.pos >= 25) recordWpm(this.wpmNow());
+          burst(this.parts, ROPE_X, CLIMB_SY, '#ff9800', 40, 250);
+        }
+      }
+    }
+    while (this.spawnedTo < this.hv + 25) { this.spawnedTo += 4; this.spawnAt(this.spawnedTo); }
+    for (const o of this.objs) {
+      o.x += o.vx * dt; o.ph += dt;
+      if (o.x < -200) o.x = W + 200; else if (o.x > W + 200) o.x = -200;
+    }
+    this.objs = this.objs.filter(o => o.n > this.hv - 30);
+  }
+  key(ch) {
+    if (this.fallT > 0) return;
+    this.keys++;
+    if (ch === this.text[this.pos]) {
+      this.hits++; this.pos++; this.err = false; this.started = true;
+      this.h += 1; this.lastHit = this.time;
+      this.score = Math.max(this.score, Math.round(altitude(this.climbed())));
+    } else {
+      this.err = true; this.flash = 0.15;
+      if (this.started) {
+        this.h = Math.max(1, this.h - 1.5);
+        floatText(this.parts, ROPE_X + 60, CLIMB_SY - 70, 'Rutsch!', '#ffeb3b');
+      }
+    }
+  }
+  title() { return 'Das Seil ist durchgebrannt!'; }
+  lines(best) {
+    return [`Höhe: ${fmtAlt(this.score)}   (Rekord: ${fmtAlt(best)})`,
+            `${this.wpmNow()} WPM   ·   Genauigkeit: ${accOf(this)} %`,
+            `Erreicht: ${zoneName(this.climberN())}`];
+  }
+  draw() {
+    const cam = this.hv;
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, lerpColor(SKY, cam + 20)); sky.addColorStop(1, lerpColor(SKY, cam - 18));
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+    // Sterne und Mond
+    const starA = Math.max(0, Math.min(1, (cam - 190) / 90));
+    if (starA > 0) {
+      for (const s of this.stars) {
+        ctx.globalAlpha = starA * (0.6 + 0.4 * Math.sin(this.time * 2 + s.p));
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(s.x, (s.y + cam * 0.7) % H, s.r, s.r);
+      }
+      ctx.globalAlpha = starA;
+      ctx.fillStyle = '#e8e8e0'; ctx.beginPath(); ctx.arc(780, 110, 42, 0, 7); ctx.fill();
+      ctx.fillStyle = '#cfcfc4';
+      for (const [dx, dy, r] of [[-12, -8, 8], [14, 6, 6], [-4, 18, 5]]) { ctx.beginPath(); ctx.arc(780 + dx, 110 + dy, r, 0, 7); ctx.fill(); }
+      ctx.globalAlpha = 1;
+    }
+    // Boden mit Häusern und Bäumen
+    const gy = this.sy(0);
+    if (gy < H) {
+      ctx.fillStyle = '#66bb6a'; ctx.fillRect(0, gy, W, H - gy);
+      ctx.fillStyle = '#8d6e63'; ctx.fillRect(0, gy + 30, W, H);
+      for (const [x, w, h, c] of [[60, 70, 60, '#ef9a9a'], [520, 90, 80, '#fff59d'], [700, 60, 55, '#90caf9']]) {
+        ctx.fillStyle = c; ctx.fillRect(x, gy - h, w, h);
+        ctx.fillStyle = '#b71c1c'; ctx.beginPath(); ctx.moveTo(x - 8, gy - h); ctx.lineTo(x + w / 2, gy - h - 35); ctx.lineTo(x + w + 8, gy - h); ctx.fill();
+        ctx.fillStyle = '#5d4037'; ctx.fillRect(x + w / 2 - 9, gy - 26, 18, 26);
+      }
+      for (const x of [200, 250, 430, 640, 850]) {
+        ctx.fillStyle = '#6d4c41'; ctx.fillRect(x - 5, gy - 30, 10, 30);
+        ctx.fillStyle = '#2e7d32'; ctx.beginPath(); ctx.arc(x, gy - 45, 24, 0, 7); ctx.fill();
+      }
+    }
+    // Himmelsobjekte
+    for (const o of this.objs) this.drawObj(o, o.x, this.sy(o.n));
+    // Seil (unterhalb des Feuers verbrannt)
+    const ropeBottom = this.sy(Math.max(0, this.fire));
+    ctx.strokeStyle = '#a1887f'; ctx.lineWidth = 7;
+    ctx.beginPath(); ctx.moveTo(ROPE_X, 0); ctx.lineTo(ROPE_X, ropeBottom); ctx.stroke();
+    ctx.strokeStyle = '#6d4c41'; ctx.lineWidth = 2;
+    const tw = ((cam * CLIMB_PX) % 12 + 12) % 12;
+    for (let y = tw - 12; y < ropeBottom; y += 12) { ctx.beginPath(); ctx.moveTo(ROPE_X - 3, y); ctx.lineTo(ROPE_X + 3, y + 6); ctx.stroke(); }
+    if (this.started || this.fire > 0) this.drawFire(ropeBottom);
+    this.drawClimber();
+    // Kopfzeile + Abstand zum Feuer
+    topBar(`Höhe: ${fmtAlt(altitude(this.climbed()))}   ·   WPM: ${this.wpmNow()}   ·   ${accOf(this)} %`, zoneName(this.climberN()));
+    const gap = Math.max(0, this.climberN() - this.fire);
+    ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(14, 50, 200, 26);
+    ctx.fillStyle = gap < 6 ? '#f44336' : gap < 12 ? '#ffc107' : '#66bb6a';
+    ctx.fillRect(14, 50, Math.min(200, gap * 8), 26);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 15px system-ui, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText(`🔥 Vorsprung: ${Math.floor(gap)}`, 22, 68);
+    if (!this.started) {
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 26px system-ui, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('Tippe los, um zu klettern!', 640, 200);
+    }
+    drawTypingBox(this);
+    if (this.flash > 0) { ctx.fillStyle = `rgba(255,0,0,${this.flash})`; ctx.fillRect(0, 0, W, H); }
+  }
+  drawFire(y) {
+    const cols = ['#d84315', '#ff5722', '#ff9800', '#ffc107', '#fff59d'];
+    for (let i = 0; i < 5; i++) {
+      const fl = Math.sin(this.time * 18 + i * 1.7) * 4;
+      ctx.fillStyle = cols[i];
+      ctx.beginPath(); ctx.ellipse(ROPE_X + fl * 0.6, y - i * 5, 18 - i * 3, 30 - i * 5, 0, 0, 7); ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(90,90,90,.35)';
+    for (let i = 0; i < 4; i++) {
+      const k = (this.time * 0.8 + i / 4) % 1;
+      ctx.beginPath(); ctx.arc(ROPE_X + Math.sin(k * 6 + i) * 12, y - 30 - k * 90, 8 + k * 14, 0, 7); ctx.fill();
+    }
+  }
+  drawClimber() {
+    const x = ROPE_X;
+    let y = this.sy(this.climberN());
+    if (this.fallT > 0) y += 0.5 * 1200 * this.fallT * this.fallT;
+    const up = this.pos % 2 === 0, falling = this.fallT > 0;
+    if (this.sliding && !falling) {
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 16px system-ui, sans-serif'; ctx.textAlign = 'left';
+      ctx.fillText('⬇ rutscht!', x + 34, y - 40);
+    }
+    ctx.lineCap = 'round'; ctx.lineWidth = 5;
+    // Beine
+    ctx.strokeStyle = '#37474f';
+    ctx.beginPath();
+    if (falling) { ctx.moveTo(x + 12, y - 30); ctx.lineTo(x + 2, y - 8); ctx.moveTo(x + 12, y - 30); ctx.lineTo(x + 26, y - 6); }
+    else { ctx.moveTo(x + 12, y - 30); ctx.lineTo(x + 4, y - 14); ctx.lineTo(x, y); ctx.moveTo(x + 12, y - 30); ctx.lineTo(x + 22, y - 16); ctx.lineTo(x + 6, y - 6); }
+    ctx.stroke();
+    // Körper
+    ctx.strokeStyle = '#1e88e5'; ctx.lineWidth = 8;
+    ctx.beginPath(); ctx.moveTo(x + 12, y - 30); ctx.lineTo(x + 12, y - 56); ctx.stroke();
+    // Arme
+    ctx.strokeStyle = '#ffcc80'; ctx.lineWidth = 5;
+    ctx.beginPath();
+    if (falling) { ctx.moveTo(x + 12, y - 54); ctx.lineTo(x - 6, y - 76); ctx.moveTo(x + 12, y - 54); ctx.lineTo(x + 32, y - 76); }
+    else {
+      ctx.moveTo(x + 12, y - 54); ctx.lineTo(x + 2, y - (up ? 82 : 70));
+      ctx.moveTo(x + 12, y - 54); ctx.lineTo(x + 2, y - (up ? 66 : 78));
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#ffcc80'; ctx.beginPath(); ctx.arc(x + 14, y - 66, 10, 0, 7); ctx.fill();
+    ctx.fillStyle = '#e53935'; ctx.beginPath(); ctx.arc(x + 14, y - 70, 10, Math.PI, 0); ctx.fill();
+  }
+  drawObj(o, x, y) {
+    if (y < -80 || y > H + 80) return;
+    const dir = Math.sign(o.vx) || 1;
+    if (o.type === 'bird') {
+      const w = Math.sin(o.ph * 10) * 7;
+      ctx.strokeStyle = '#263238'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(x - 12, y - w); ctx.quadraticCurveTo(x - 5, y - 4, x, y); ctx.quadraticCurveTo(x + 5, y - 4, x + 12, y - w); ctx.stroke();
+    } else if (o.type === 'cloud') {
+      const s = o.s;
+      ctx.fillStyle = 'rgba(255,255,255,.85)';
+      ctx.beginPath();
+      ctx.arc(x, y, 26 * s, 0, 7); ctx.arc(x + 30 * s, y - 14 * s, 34 * s, 0, 7); ctx.arc(x + 66 * s, y, 26 * s, 0, 7); ctx.arc(x + 32 * s, y + 8 * s, 28 * s, 0, 7);
+      ctx.fill();
+    } else if (o.type === 'plane') {
+      ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(x - dir * 40, y); ctx.lineTo(x - dir * 220, y); ctx.stroke();
+      ctx.fillStyle = '#eceff1';
+      ctx.beginPath(); ctx.ellipse(x, y, 40, 8, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = '#b0bec5';
+      ctx.beginPath(); ctx.moveTo(x + dir * 5, y); ctx.lineTo(x - dir * 12, y + 26); ctx.lineTo(x - dir * 20, y + 26); ctx.lineTo(x - dir * 10, y); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x - dir * 30, y); ctx.lineTo(x - dir * 42, y - 18); ctx.lineTo(x - dir * 48, y - 18); ctx.lineTo(x - dir * 40, y); ctx.fill();
+      ctx.fillStyle = '#1565c0'; ctx.fillRect(x - 25, y - 2, 50, 2);
+    } else if (o.type === 'sat') {
+      ctx.fillStyle = '#bdbdbd'; ctx.fillRect(x - 6, y - 6, 12, 12);
+      ctx.fillStyle = '#1a3d7c'; ctx.fillRect(x - 30, y - 4, 22, 8); ctx.fillRect(x + 8, y - 4, 22, 8);
+      ctx.fillStyle = Math.sin(o.ph * 4) > 0 ? '#f44336' : '#600'; ctx.fillRect(x - 1, y - 10, 2, 3);
+    } else if (o.type === 'iss') {
+      ctx.fillStyle = '#9e9e9e'; ctx.fillRect(x - 70, y - 2, 140, 4);
+      for (const px of [-62, -40, 26, 48]) {
+        ctx.fillStyle = '#c9a227'; ctx.fillRect(x + px, y - 30, 14, 26); ctx.fillRect(x + px, y + 4, 14, 26);
+        ctx.strokeStyle = '#7a5f10'; ctx.lineWidth = 1; ctx.strokeRect(x + px, y - 30, 14, 26); ctx.strokeRect(x + px, y + 4, 14, 26);
+      }
+      ctx.fillStyle = '#e0e0e0';
+      ctx.fillRect(x - 18, y - 7, 36, 14); ctx.fillRect(x - 5, y - 18, 10, 36);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 12px system-ui, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('ISS', x, y + 46);
+    }
+  }
+}
+
+loadSettings();
+updateModeInfo();
+</script>
+</body>
+</html>
