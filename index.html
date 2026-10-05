@@ -101,19 +101,21 @@
   /* ---------- Erklärung vor neuen Tasten ---------- */
   .intro-title { margin: 0 0 10px; }
   #introText p { line-height: 1.55; margin: 0 0 10px; max-width: 700px; }
-  .intro-kb { position: relative; margin: 22px 0 34px; }
+  .intro-kb { margin: 22px 0 18px; }
   .intro-kb .k.bump::after { height: 3px; opacity: .9; }
-  .finger { position: absolute; left: 0; top: 0; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%;
-    background: rgba(21,101,192,.2); border: 2px solid var(--cur); pointer-events: none; }
-  .finger.ghost { border-color: #0002; background: #0000000a; }
-  .finger.pulse { animation: pulse 1.4s ease-in-out infinite; }
-  .finger span { position: absolute; top: 36px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: .72rem;
-    font-weight: 700; color: #fff; background: var(--cur); padding: 1px 7px; border-radius: 99px; }
+  /* Durchsichtige Hände über der Tastatur */
+  .kb { position: relative; }
+  .kb.has-hands { padding-bottom: 50px; }
+  .hands { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+  .hands.drop { animation: handsIn 1s cubic-bezier(.2,.8,.2,1) .2s both; }
+  @keyframes handsIn { from { opacity: 0; transform: translateY(45px); } to { opacity: 1; transform: none; } }
+  .flabel { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); white-space: nowrap; pointer-events: none;
+    font-size: .72rem; font-weight: 700; color: #fff; background: var(--cur); padding: 1px 7px; border-radius: 99px; }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   }
   #cv { width: 100%; display: block; border-radius: 8px; background: #000; }
-  @media (max-width: 600px) { .kb .k { width: 26px; height: 32px; font-size: .8rem; } .kb .space { width: 160px; } #text { font-size: 1.3rem; line-height: 2rem; } }
+  @media (max-width: 600px) { .kb .k { width: 26px; height: 32px; font-size: .8rem; } .kb .space { width: 160px; } #text { font-size: 1.3rem; line-height: 2rem; } .kb.has-hands { padding-bottom: 38px; } }
 </style>
 </head>
 <body>
@@ -183,6 +185,7 @@
       <div class="trainOnly">
         <label><input type="checkbox" id="stopOnError" checked> Bei Fehler stehen bleiben</label>
         <label><input type="checkbox" id="showKb" checked> Tastatur anzeigen</label>
+        <label><input type="checkbox" id="showHands" checked> Hände anzeigen</label>
       </div>
       <div style="flex:0 0 auto"><button class="primary" id="startBtn">Start ▶</button></div>
     </div>
@@ -352,7 +355,7 @@ function saveSettings() {
   try {
     localStorage.setItem('tipplerner', JSON.stringify({
       keys: $('keys').value, count: $('count').value,
-      stop: $('stopOnError').checked, kb: $('showKb').checked, mode: getMode(), tempo: $('tempo').value,
+      stop: $('stopOnError').checked, kb: $('showKb').checked, hands: $('showHands').checked, mode: getMode(), tempo: $('tempo').value,
       raceOpp: $('raceOpp').value, raceLen: $('raceLen').value
     }));
   } catch (e) {}
@@ -365,6 +368,7 @@ function loadSettings() {
     $('count').value = s.count ?? $('count').value;
     $('stopOnError').checked = s.stop ?? true;
     $('showKb').checked = s.kb ?? true;
+    $('showHands').checked = s.hands ?? true;
     if (s.tempo) $('tempo').value = s.tempo;
     if (s.raceOpp) $('raceOpp').value = s.raceOpp;
     if (s.raceLen) $('raceLen').value = s.raceLen;
@@ -396,6 +400,9 @@ function fillKeyboard(kb, on, focus) {
 function buildKeyboard() {
   $('kb').classList.toggle('hidden', !$('showKb').checked);
   fillKeyboard($('kb'), allowed, lesson ? focusOf(lesson) : '');
+  const h = $('showHands').checked;
+  $('kb').classList.toggle('has-hands', h);
+  kbHands = h ? new Hands($('kb')) : null;
 }
 
 function pressKey(ch, ok) {
@@ -409,6 +416,12 @@ function pressKey(ch, ok) {
 function highlightNext() {
   document.querySelectorAll('#kb .next').forEach(e => e.classList.remove('next'));
   if (pos < target.length) {
+    const ch = target[pos];
+    if (kbHands) {
+      // Leertaste: Daumen der anderen Hand als beim Buchstaben davor
+      const f = ch === ' ' ? (FINGER[target[pos - 1]] <= 4 ? 10 : 9) : FINGER[ch];
+      kbHands.set(f ? { [f]: ch } : {});
+    }
     const el = document.querySelector(`#kb [data-key="${CSS.escape(target[pos])}"]`);
     if (el) el.classList.add('next');
   }
@@ -1598,55 +1611,123 @@ function showIntro() {
 const FINGER_HOME = { 1: 'a', 2: 's', 3: 'd', 4: 'f', 5: 'j', 6: 'k', 7: 'l', 8: 'ö' };
 const FINGER_NAME = { 1: 'kleiner Finger', 2: 'Ringfinger', 3: 'Mittelfinger', 4: 'Zeigefinger' };
 
-// Finger als Kreise auf die Tastatur legen; Finger mit neuen Tasten greifen hin und zurück
-function layoutIntro() {
-  const kb = $('introKb');
-  if (!lesson || $('intro').classList.contains('hidden')) return;
-  kb.querySelectorAll('.finger').forEach(e => e.remove());
-  const base = kb.getBoundingClientRect();
-  const center = el => { const r = el.getBoundingClientRect(); return [r.left - base.left + r.width / 2, r.top - base.top + r.height / 2]; };
-  const at = c => center(kb.querySelector(`[data-key="${CSS.escape(c)}"]`));
-  const T = (x, y) => `translate(${x}px, ${y}px)`;
-  const dot = (x, y, label, ghost) => {
-    const d = document.createElement('div');
-    d.className = 'finger' + (ghost ? ' ghost' : '');
-    d.style.transform = T(x, y);
-    if (label) d.innerHTML = `<span>${label}</span>`;
-    kb.appendChild(d);
-    return d;
-  };
-  const still = reducedMotion();
-  const first = lesson.art === 'neu' && lesson.focus === 'fj';
-  const focus = lesson.art === 'leer' ? '' : lesson.focus;
+/* ---- Durchsichtige Hände ----
+   Finger 1–8 wie in FINGER (1 = linker kleiner Finger … 8 = rechter kleiner Finger), 9 = linker, 10 = rechter Daumen.
+   Jeder Finger ist eine dicke Linie vom Knöchel bis zur Fingerspitze; die Spitze gleitet weich zur Zieltaste. */
+const SVG_NS = 'http://www.w3.org/2000/svg';
+let kbHands = null;
 
-  for (let f = 1; f <= 8; f++) {
-    const [hx, hy] = at(FINGER_HOME[f]);
-    const keys = [...focus].filter(c => FINGER[c] === f);
-    const label = keys.length ? `${f <= 4 ? 'linker' : 'rechter'} ${FINGER_NAME[f <= 4 ? f : 9 - f]}` : '';
-    const d = dot(hx, hy, label, !keys.length && !first);
-    // Ganz am Anfang setzen sich die Finger nacheinander auf die Grundstellung
-    if (first && !still)
-      d.animate([{ opacity: 0, transform: T(hx, hy - 50) }, { opacity: 1, transform: T(hx, hy) }],
-        { duration: 550, delay: 300 + f * 120, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' });
-    if (!keys.length) continue;
-    const targets = keys.filter(c => c !== FINGER_HOME[f]);
-    if (!targets.length || still) { d.classList.add('pulse'); continue; }
-    const ease = 'cubic-bezier(.45,0,.25,1)', seg = 1 / targets.length, frames = [{ transform: T(hx, hy), offset: 0, easing: ease }];
-    targets.forEach((c, i) => {
-      const [tx, ty] = at(c), o = i * seg;
-      frames.push({ transform: T(hx, hy), offset: o + seg * 0.2, easing: ease }, { transform: T(tx, ty), offset: o + seg * 0.42, easing: ease },
-                  { transform: T(tx, ty), offset: o + seg * 0.68, easing: ease }, { transform: T(hx, hy), offset: o + seg * 0.9, easing: ease });
-    });
-    frames.push({ transform: T(hx, hy), offset: 1 });
-    d.animate(frames, { duration: 2600 * targets.length, iterations: Infinity });
+class Hands {
+  constructor(kb) {
+    kb.querySelectorAll(':scope > .hands').forEach(e => e.remove());
+    this.kb = kb;
+    this.svg = document.createElementNS(SVG_NS, 'svg');
+    this.svg.classList.add('hands');
+    kb.appendChild(this.svg);
+    this.tips = null; this.targets = {}; this.active = new Set(); this.raf = 0;
   }
-  if (lesson.art === 'leer') {
-    const sp = kb.querySelector('.space'), [sx, sy] = center(sp), w = sp.getBoundingClientRect().width;
-    dot(sx - w * 0.2, sy, 'Daumen').classList.add('pulse');
-    dot(sx + w * 0.2, sy, 'Daumen').classList.add('pulse');
+  // Maße aus den echten Tasten berechnen (funktioniert auch bei der kleinen Handy-Tastatur)
+  layout() {
+    const base = this.kb.getBoundingClientRect();
+    if (!base.width) return false;
+    const box = el => { const r = el.getBoundingClientRect(); return { x: r.left - base.left + r.width / 2, y: r.top - base.top + r.height / 2, w: r.width }; };
+    this.key = c => box(this.kb.querySelector(`[data-key="${CSS.escape(c)}"]`));
+    const a = this.key('a'), Kw = this.key('s').x - a.x, P = a.y - this.key('q').y, sp = box(this.kb.querySelector('.space'));
+    const H = { 9: { x: sp.x - sp.w * 0.17, y: sp.y }, 10: { x: sp.x + sp.w * 0.17, y: sp.y } };
+    for (let f = 1; f <= 8; f++) H[f] = this.key(FINGER_HOME[f]);
+    const drop = [0, 1.75, 1.5, 1.4, 1.5, 1.5, 1.4, 1.5, 1.75], K = {};
+    for (let f = 1; f <= 8; f++) K[f] = { x: H[f].x + (f <= 4 ? 0.3 : -0.3) * Kw, y: H[f].y + drop[f] * P };
+    K[9] = { x: K[4].x + 0.15 * Kw, y: K[4].y + 0.95 * P };
+    K[10] = { x: K[5].x - 0.15 * Kw, y: K[5].y + 0.95 * P };
+    const wy = H[4].y + 3.2 * P;
+    this.palms = [
+      [K[1], K[2], K[3], K[4], K[9], { x: K[4].x - 0.2 * Kw, y: wy }, { x: K[1].x + 0.3 * Kw, y: wy }],
+      [K[8], K[7], K[6], K[5], K[10], { x: K[5].x + 0.2 * Kw, y: wy }, { x: K[8].x - 0.3 * Kw, y: wy }],
+    ];
+    this.home = H; this.knuckle = K; this.Kw = Kw;
+    this.tips = {};
+    for (let f = 1; f <= 10; f++) this.tips[f] = { ...this.goal(f) };
+    return true;
+  }
+  goal(f) { const k = this.targets[f]; return k && k !== ' ' ? this.key(k) : this.home[f]; }
+  // targets: { finger: Taste }, active: Finger, die hervorgehoben werden (Standard: die mit Ziel)
+  set(targets, active) {
+    this.targets = targets;
+    this.active = new Set(active || Object.keys(targets).map(Number));
+    if (!this.tips && !this.layout()) return;
+    if (reducedMotion()) { for (let f = 1; f <= 10; f++) this.tips[f] = { ...this.goal(f) }; this.draw(); return; }
+    if (!this.raf) { this.last = performance.now(); this.raf = requestAnimationFrame(t => this.tick(t)); }
+    this.draw();
+  }
+  relayout() { if (this.tips) { this.tips = null; this.set(this.targets, [...this.active]); } }
+  tick(now) {
+    const k = Math.min(1, (now - this.last) / 1000 * 11);
+    this.last = now;
+    let moving = false;
+    for (let f = 1; f <= 10; f++) {
+      const t = this.tips[f], g = this.goal(f);
+      t.x += (g.x - t.x) * k; t.y += (g.y - t.y) * k;
+      if (Math.abs(g.x - t.x) + Math.abs(g.y - t.y) > 0.3) moving = true; else { t.x = g.x; t.y = g.y; }
+    }
+    this.draw();
+    this.raf = moving && this.svg.isConnected ? requestAnimationFrame(t => this.tick(t)) : 0;
+  }
+  draw() {
+    const Kw = this.Kw, n = v => v.toFixed(1);
+    const finger = (f, color) => {
+      const a = this.knuckle[f], b = this.tips[f], w = (f === 1 || f === 8 ? 0.46 : f >= 9 ? 0.6 : 0.56) * Kw;
+      return `<line x1="${n(a.x)}" y1="${n(a.y)}" x2="${n(b.x)}" y2="${n(b.y)}" stroke="${color}" stroke-width="${n(w)}" stroke-linecap="round"/>`;
+    };
+    let hand = this.palms.map(pts => `<path d="M${pts.map(q => n(q.x) + ' ' + n(q.y)).join(' L')} Z" fill="#2979ff" stroke="#2979ff" stroke-width="${n(0.5 * Kw)}" stroke-linejoin="round"/>`).join('');
+    let act = '';
+    for (let f = 1; f <= 10; f++) {
+      hand += finger(f, '#2979ff');
+      if (this.active.has(f)) act += finger(f, '#0d47a1')
+        + `<circle cx="${n(this.tips[f].x)}" cy="${n(this.tips[f].y)}" r="${n(0.2 * Kw)}" fill="none" stroke="#fff" stroke-width="2"/>`;
+    }
+    // Gruppen-Deckkraft statt Einzel-Deckkraft: so werden Überlappungen nicht dunkler
+    this.svg.innerHTML = `<g opacity=".24">${hand}</g><g opacity=".5">${act}</g>`;
   }
 }
-window.addEventListener('resize', layoutIntro);
+
+/* ---- Erklär-Animation: die Hände zeigen, welcher Finger wohin greift ---- */
+let introTimer = 0, introHands = null;
+function layoutIntro() {
+  clearTimeout(introTimer);
+  const kb = $('introKb');
+  if (!lesson || $('intro').classList.contains('hidden')) return;
+  kb.classList.add('has-hands');
+  kb.querySelectorAll('.flabel').forEach(e => e.remove());
+  const first = lesson.art === 'neu' && lesson.focus === 'fj';
+  const focus = lesson.art === 'leer' ? '' : lesson.focus;
+  const fingers = lesson.art === 'leer' ? [9, 10] : [...new Set([...focus].map(c => FINGER[c]))];
+  const reach = [...focus].filter(c => c !== FINGER_HOME[FINGER[c]]);
+  const hands = introHands = new Hands(kb);
+  if (first) hands.svg.classList.add('drop');
+  hands.set({}, fingers);
+  if (!hands.tips) return;
+  // Beschriftung auf dem Knöchel des Fingers
+  for (const f of fingers) {
+    const k = hands.knuckle[f], l = document.createElement('div');
+    l.className = 'flabel';
+    l.textContent = f >= 9 ? 'Daumen' : `${f <= 4 ? 'linker' : 'rechter'} ${FINGER_NAME[f <= 4 ? f : 9 - f]}`;
+    l.style.left = k.x + 'px'; l.style.top = k.y + 'px';
+    kb.appendChild(l);
+  }
+  if (!reach.length || reducedMotion()) return;
+  let i = 0;
+  const step = () => {
+    if (introHands !== hands || $('intro').classList.contains('hidden')) return;
+    const c = reach[i++ % reach.length];
+    hands.set({ [FINGER[c]]: c }, fingers);
+    introTimer = setTimeout(() => {
+      hands.set({}, fingers);
+      introTimer = setTimeout(step, 900);
+    }, 1300);
+  };
+  introTimer = setTimeout(step, first ? 1400 : 700);
+}
+window.addEventListener('resize', () => { layoutIntro(); if (kbHands) kbHands.relayout(); });
 $('introGo').addEventListener('click', start);
 $('introBack').addEventListener('click', showSetup);
 
