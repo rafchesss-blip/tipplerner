@@ -1626,25 +1626,26 @@ class Hands {
     kb.appendChild(this.svg);
     this.tips = null; this.targets = {}; this.active = new Set(); this.raf = 0;
   }
-  // Maße aus den echten Tasten berechnen (funktioniert auch bei der kleinen Handy-Tastatur)
+  // Maße aus den echten Tasten berechnen (funktioniert auch bei der kleinen Handy-Tastatur).
+  // offsetLeft/offsetTop statt getBoundingClientRect: unabhängig vom Scrollen und von Animationen.
   layout() {
-    const base = this.kb.getBoundingClientRect();
-    if (!base.width) return false;
-    const box = el => { const r = el.getBoundingClientRect(); return { x: r.left - base.left + r.width / 2, y: r.top - base.top + r.height / 2, w: r.width }; };
-    this.key = c => box(this.kb.querySelector(`[data-key="${CSS.escape(c)}"]`));
-    const a = this.key('a'), Kw = this.key('s').x - a.x, P = a.y - this.key('q').y, sp = box(this.kb.querySelector('.space'));
+    if (!this.kb.offsetWidth) return false;
+    const pos = {};
+    this.kb.querySelectorAll('[data-key]').forEach(el => {
+      pos[el.dataset.key] = { x: el.offsetLeft + el.offsetWidth / 2, y: el.offsetTop + el.offsetHeight / 2, w: el.offsetWidth };
+    });
+    this.key = c => pos[c] || pos[' '];
+    const a = pos.a, Kw = pos.s.x - a.x, P = a.y - pos.q.y, sp = pos[' '];
     const H = { 9: { x: sp.x - sp.w * 0.17, y: sp.y }, 10: { x: sp.x + sp.w * 0.17, y: sp.y } };
-    for (let f = 1; f <= 8; f++) H[f] = this.key(FINGER_HOME[f]);
+    for (let f = 1; f <= 8; f++) H[f] = pos[FINGER_HOME[f]];
     const drop = [0, 1.75, 1.5, 1.4, 1.5, 1.5, 1.4, 1.5, 1.75], K = {};
     for (let f = 1; f <= 8; f++) K[f] = { x: H[f].x + (f <= 4 ? 0.3 : -0.3) * Kw, y: H[f].y + drop[f] * P };
-    K[9] = { x: K[4].x + 0.15 * Kw, y: K[4].y + 0.95 * P };
-    K[10] = { x: K[5].x - 0.15 * Kw, y: K[5].y + 0.95 * P };
+    K[9] = { x: K[4].x + 0.05 * Kw, y: K[4].y + 1.05 * P };
+    K[10] = { x: K[5].x - 0.05 * Kw, y: K[5].y + 1.05 * P };
     const wy = H[4].y + 3.2 * P;
-    this.palms = [
-      [K[1], K[2], K[3], K[4], K[9], { x: K[4].x - 0.2 * Kw, y: wy }, { x: K[1].x + 0.3 * Kw, y: wy }],
-      [K[8], K[7], K[6], K[5], K[10], { x: K[5].x + 0.2 * Kw, y: wy }, { x: K[8].x - 0.3 * Kw, y: wy }],
-    ];
-    this.home = H; this.knuckle = K; this.Kw = Kw;
+    this.wrist = [[{ x: K[4].x - 0.2 * Kw, y: wy }, { x: K[1].x + 0.3 * Kw, y: wy }],
+                  [{ x: K[5].x + 0.2 * Kw, y: wy }, { x: K[8].x - 0.3 * Kw, y: wy }]];
+    this.home = H; this.knuckle0 = K; this.Kw = Kw;
     this.tips = {};
     for (let f = 1; f <= 10; f++) this.tips[f] = { ...this.goal(f) };
     return true;
@@ -1673,12 +1674,28 @@ class Hands {
     this.raf = moving && this.svg.isConnected ? requestAnimationFrame(t => this.tick(t)) : 0;
   }
   draw() {
-    const Kw = this.Kw, n = v => v.toFixed(1);
+    const Kw = this.Kw, n = v => v.toFixed(1), K = this.knuckle0;
+    // Beim Greifen geht die ganze Hand ein Stück mit, damit der Finger nicht lang gezogen wird
+    const side = f => f <= 4 || f === 9 ? 0 : 1, shift = [{ x: 0, y: 0 }, { x: 0, y: 0 }], d = {};
+    for (let f = 1; f <= 10; f++) {
+      d[f] = { x: this.tips[f].x - this.home[f].x, y: this.tips[f].y - this.home[f].y };
+      const sh = shift[side(f)];
+      if (Math.hypot(d[f].x, d[f].y) > Math.hypot(sh.x, sh.y)) shift[side(f)] = d[f];
+    }
+    shift.forEach((v, i) => shift[i] = { x: v.x * 0.45, y: v.y * 0.45 });
+    const kn = {};
+    for (let f = 1; f <= 10; f++) {
+      const sh = shift[side(f)];
+      kn[f] = { x: K[f].x + sh.x + 0.4 * (d[f].x - sh.x), y: K[f].y + sh.y + 0.4 * (d[f].y - sh.y) };
+    }
+    this.knuckle = kn;
+    const palm = (ids, i) => [...ids.map(f => kn[f]), ...this.wrist[i].map(w => ({ x: w.x + shift[i].x * 0.5, y: w.y + shift[i].y * 0.5 }))];
     const finger = (f, color) => {
-      const a = this.knuckle[f], b = this.tips[f], w = (f === 1 || f === 8 ? 0.46 : f >= 9 ? 0.6 : 0.56) * Kw;
+      const a = kn[f], b = this.tips[f], w = (f === 1 || f === 8 ? 0.46 : f >= 9 ? 0.82 : 0.56) * Kw;
       return `<line x1="${n(a.x)}" y1="${n(a.y)}" x2="${n(b.x)}" y2="${n(b.y)}" stroke="${color}" stroke-width="${n(w)}" stroke-linecap="round"/>`;
     };
-    let hand = this.palms.map(pts => `<path d="M${pts.map(q => n(q.x) + ' ' + n(q.y)).join(' L')} Z" fill="#2979ff" stroke="#2979ff" stroke-width="${n(0.5 * Kw)}" stroke-linejoin="round"/>`).join('');
+    let hand = [palm([1, 2, 3, 4, 9], 0), palm([8, 7, 6, 5, 10], 1)]
+      .map(pts => `<path d="M${pts.map(q => n(q.x) + ' ' + n(q.y)).join(' L')} Z" fill="#2979ff" stroke="#2979ff" stroke-width="${n(0.5 * Kw)}" stroke-linejoin="round"/>`).join('');
     let act = '';
     for (let f = 1; f <= 10; f++) {
       hand += finger(f, '#2979ff');
@@ -1708,7 +1725,7 @@ function layoutIntro() {
   if (!hands.tips) return;
   // Beschriftung auf dem Knöchel des Fingers
   for (const f of fingers) {
-    const k = hands.knuckle[f], l = document.createElement('div');
+    const k = hands.knuckle0[f], l = document.createElement('div');
     l.className = 'flabel';
     l.textContent = f >= 9 ? 'Daumen' : `${f <= 4 ? 'linker' : 'rechter'} ${FINGER_NAME[f <= 4 ? f : 9 - f]}`;
     l.style.left = k.x + 'px'; l.style.top = k.y + 'px';
