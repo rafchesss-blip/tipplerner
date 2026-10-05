@@ -57,6 +57,17 @@
   .site-footer a { color: var(--text); font-weight: 600; }
   .site-footer .imp { display: block; width: fit-content; margin: 8px auto 0; font-size: .72rem; font-weight: 400; color: var(--muted); text-decoration: none; }
   .site-footer .imp:hover { text-decoration: underline; }
+  .kurs-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .kurs-bar { flex: 1 1 160px; height: 10px; background: #eee8db; border-radius: 99px; overflow: hidden; }
+  .kurs-bar div { height: 100%; background: var(--ok); transition: width .3s; }
+  .lessons { position: relative; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 6px; max-height: 340px; overflow-y: auto; padding: 2px; }
+  .lesson { display: flex; gap: 8px; align-items: center; text-align: left; padding: 7px 10px; font-size: .92rem; }
+  .lesson .nr { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 1.6em; }
+  .lesson .pct { margin-left: auto; color: var(--ok); font-size: .8rem; }
+  .lesson.done { background: #eef7ec; border-color: #cfe6ca; }
+  .lesson.cur { border: 2px solid var(--cur); background: #e8f0fb; font-weight: 600; }
+  .lesson:disabled { opacity: .45; cursor: not-allowed; background: #fff; }
+  .lesson-head { font-weight: 600; color: var(--cur); margin-bottom: 12px; }
   #cv { width: 100%; display: block; border-radius: 8px; background: #000; }
   @media (max-width: 600px) { .kb .k { width: 26px; height: 32px; font-size: .8rem; } .kb .space { width: 160px; } #text { font-size: 1.3rem; line-height: 2rem; } }
 </style>
@@ -67,12 +78,22 @@
 
   <section class="panel" id="setup">
     <div class="modes">
-      <label class="mode"><input type="radio" name="mode" value="train" checked> ⌨️ Training</label>
+      <label class="mode"><input type="radio" name="mode" value="kurs" checked> 🎓 Kurs</label>
+      <label class="mode"><input type="radio" name="mode" value="train"> ⌨️ Training</label>
       <label class="mode"><input type="radio" name="mode" value="balloon"> 🎈 Ballon-Spiel</label>
       <label class="mode"><input type="radio" name="mode" value="lava"> 🌋 Lava-Spiel</label>
       <label class="mode"><input type="radio" name="mode" value="race"> 🏎️ Autorennen</label>
       <label class="mode"><input type="radio" name="mode" value="climb"> 🧗 Seil-Klettern</label>
     </div>
+    <div id="kurs" class="hidden">
+      <div class="kurs-top">
+        <b id="kursInfo"></b>
+        <div class="kurs-bar"><div id="kursBar"></div></div>
+        <button class="small" id="kursReset">Kurs zurücksetzen</button>
+      </div>
+      <div class="lessons" id="lessons"></div>
+    </div>
+    <div class="keysOnly">
     <label for="keys">Erlaubte Tasten</label>
     <input type="text" id="keys" value="asdfjklö" autocomplete="off" spellcheck="false">
     <div class="presets">
@@ -82,6 +103,7 @@
       <button class="small" data-keys="asdfghjklöäeirutzwo">+ t z w o</button>
       <button class="small" data-keys="asdfghjklöäeirutzwoqpücnvbm">+ obere/untere Reihe</button>
       <button class="small" data-keys="abcdefghijklmnopqrstuvwxyzäöüß">Alle Buchstaben</button>
+    </div>
     </div>
     <div class="row">
       <div class="raceOnly">
@@ -110,7 +132,7 @@
           <option value="2">🚀 Schnell</option>
         </select>
       </div>
-      <div class="trainOnly">
+      <div class="countOnly">
         <label for="count">Anzahl Wörter</label>
         <input type="number" id="count" value="30" min="5" max="300">
       </div>
@@ -124,6 +146,7 @@
   </section>
 
   <section class="panel hidden" id="game">
+    <div class="lesson-head hidden" id="lessonHead"></div>
     <div id="text"></div>
     <div class="stats">
       <div>Zeit: <b id="sTime">0</b> s</div>
@@ -144,12 +167,13 @@
   </section>
 
   <section class="panel hidden" id="result">
-    <h2>Fertig! 🎉</h2>
+    <h2 id="rTitle">Fertig! 🎉</h2>
     <div class="big">
       <div id="rWpm">0<span>Wörter pro Minute (WPM)</span></div>
       <div id="rAcc">0<span>Prozent richtig</span></div>
     </div>
     <p class="hint" id="rDetail"></p>
+    <p id="rCourse"></p>
     <button class="primary" id="againBtn">Nochmal (Enter)</button>
     <button id="backBtn">Einstellungen</button>
   </section>
@@ -195,6 +219,7 @@ let allowed = new Set(), target = '', pos = 0, states = [], errorsAt = new Set()
 let keystrokes = 0, correctStrokes = 0, startTime = 0, timer = null, running = false;
 
 function parseKeys() {
+  if (lesson) return new Set(lesson.keys);
   const s = $('keys').value.toLowerCase().replace(/\s/g, '');
   return new Set([...s]);
 }
@@ -213,13 +238,23 @@ function randomWord(letters) {
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
 function updateModeInfo() {
+  const m = getMode();
+  document.querySelectorAll('.keysOnly').forEach(e => e.classList.toggle('hidden', m === 'kurs'));
+  document.querySelectorAll('.countOnly').forEach(e => e.classList.toggle('hidden', m !== 'train'));
+  document.querySelectorAll('.trainOnly').forEach(e => e.classList.toggle('hidden', m !== 'train' && m !== 'kurs'));
+  document.querySelectorAll('.tempoOnly').forEach(e => e.classList.toggle('hidden', m === 'train' || m === 'race' || m === 'kurs'));
+  document.querySelectorAll('.raceOnly').forEach(e => e.classList.toggle('hidden', m !== 'race'));
+  $('kurs').classList.toggle('hidden', m !== 'kurs');
+  $('startBtn').textContent = 'Start ▶';
+  if (m === 'kurs') {
+    renderKurs();
+    $('modeInfo').textContent = '🎓 Lerne Schritt für Schritt alle Tasten. Ab 90 % Genauigkeit geht es zur nächsten Lektion, '
+      + 'sonst wird die Lektion wiederholt. Nach jeder großen Wiederholung wartet ein Zufallsspiel!';
+    return;
+  }
   const set = parseKeys();
   const letters = [...set];
   if (letters.length === 0) { $('modeInfo').textContent = 'Bitte mindestens eine Taste eingeben.'; return; }
-  const m = getMode();
-  document.querySelectorAll('.trainOnly').forEach(e => e.classList.toggle('hidden', m !== 'train'));
-  document.querySelectorAll('.tempoOnly').forEach(e => e.classList.toggle('hidden', m === 'train' || m === 'race'));
-  document.querySelectorAll('.raceOnly').forEach(e => e.classList.toggle('hidden', m !== 'race'));
   if (m === 'balloon' || m === 'lava') {
     $('modeInfo').textContent = (m === 'balloon'
       ? '🎈 Buchstaben fallen in Ballons herunter – tippe sie, bevor sie auf die Spieße fallen! '
@@ -348,7 +383,9 @@ function updateStats() {
 function start() {
   if (parseKeys().size === 0) { updateModeInfo(); return; }
   saveSettings();
-  target = generateText();
+  target = lesson ? lessonText(lesson) : generateText();
+  $('lessonHead').classList.toggle('hidden', !lesson);
+  if (lesson) $('lessonHead').textContent = `🎓 Lektion ${lessonIdx + 1} von ${KURS.length}: ${lesson.title} · Ziel: mindestens 90 % richtig`;
   pos = 0; states = []; errorsAt = new Set();
   keystrokes = 0; correctStrokes = 0; startTime = 0; running = true;
   clearInterval(timer);
@@ -373,11 +410,27 @@ function finish() {
     `${words} Wörter · ${target.length} Zeichen in ${sec.toFixed(1)} s · ` +
     `${keystrokes} Anschläge, davon ${keystrokes - correctStrokes} Fehler · ` +
     `${Math.round(correctChars() / sec * 60)} Anschläge/Minute`;
+  $('rTitle').textContent = 'Fertig! 🎉';
+  $('rCourse').textContent = '';
+  $('againBtn').textContent = 'Nochmal (Enter)';
+  $('backBtn').textContent = 'Einstellungen';
+  if (lesson) {
+    const acc = accuracy(), last = lessonIdx === KURS.length - 1;
+    lessonPassed = acc >= 90;
+    kursMark(lessonIdx, acc, lessonPassed);
+    $('rTitle').textContent = lessonPassed ? 'Lektion geschafft! 🎉' : 'Fast! 💪';
+    $('rCourse').textContent = !lessonPassed
+      ? 'Du brauchst mindestens 90 % richtig, um weiterzukommen. Probier die Lektion nochmal!'
+      : last ? '🏆 Wow, du hast den ganzen Kurs geschafft!' : `Als Nächstes: ${KURS[lessonIdx + 1].title}`;
+    $('againBtn').textContent = lessonPassed ? (last ? 'Zur Kursübersicht (Enter)' : 'Weiter (Enter)') : 'Nochmal (Enter)';
+    $('backBtn').textContent = 'Kursübersicht';
+  }
   $('game').classList.add('hidden');
   $('result').classList.remove('hidden');
 }
 
 function showSetup() {
+  lesson = null;
   running = false; clearInterval(timer);
   stopGame();
   $('arcade').classList.add('hidden');
@@ -391,7 +444,7 @@ function showSetup() {
 document.addEventListener('keydown', e => {
   if (arcade.game) { onGameKey(e); return; }
   const resultVisible = !$('result').classList.contains('hidden');
-  if (resultVisible && e.key === 'Enter') { e.preventDefault(); start(); return; }
+  if (resultVisible && e.key === 'Enter') { e.preventDefault(); again(); return; }
   if (!running) return;
   if (e.key === 'Escape') { e.preventDefault(); start(); return; }
   if (e.ctrlKey || e.altKey || e.metaKey) return;
@@ -435,14 +488,19 @@ document.querySelectorAll('input[name=mode]').forEach(r => r.addEventListener('c
 $('arcadeBack').addEventListener('click', showSetup);
 $('raceOpp').addEventListener('change', updateModeInfo);
 $('restartBtn').addEventListener('click', e => { e.target.blur(); start(); });
-$('againBtn').addEventListener('click', start);
+$('againBtn').addEventListener('click', again);
 $('backBtn').addEventListener('click', showSetup);
 $('setupBtn').addEventListener('click', showSetup);
 
 /* ======================= Spiele ======================= */
 function getMode() { return (document.querySelector('input[name=mode]:checked') || {}).value || 'train'; }
 function gameLetters() { return [...parseKeys()].filter(c => c.trim()); }
-function launch() { getMode() === 'train' ? start() : startGame(getMode()); }
+function launch() {
+  const m = getMode();
+  if (m === 'kurs') { const d = kursData().done; runLesson(d < KURS.length ? d : 0); }
+  else if (m === 'train') start();
+  else startGame(m);
+}
 
 const cv = $('cv'), ctx = cv.getContext('2d');
 const W = cv.width, H = cv.height;
@@ -476,7 +534,9 @@ function startGame(type) {
     race: 'Tippe den Text unten ab – auch die Leerzeichen!',
     climb: 'Tippe die Wörter, um am Seil hochzuklettern – das Feuer kommt von unten!'
   }[type];
-  const tempo = parseInt($(type === 'race' ? 'raceOpp' : 'tempo').value) || 0;
+  if (lesson) $('arcadeHint').textContent = `🎓 Lektion ${lessonIdx + 1}: 🎲 Zufallsspiel! ` + $('arcadeHint').textContent;
+  // Im Kurs immer gemütliches Tempo
+  const tempo = lesson ? 0 : parseInt($(type === 'race' ? 'raceOpp' : 'tempo').value) || 0;
   const G = { balloon: BalloonGame, lava: LavaGame, race: RaceGame, climb: ClimbGame }[type];
   arcade.game = new G(letters, tempo);
   arcade.game.type = type;
@@ -497,6 +557,7 @@ function loop(now) {
   const dt = Math.min(0.05, (now - arcade.last) / 1000);
   arcade.last = now;
   if (g.over) g.overT += dt; else g.update(dt);
+  if (g.over && lesson && !g.counted) { g.counted = true; kursMark(lessonIdx, undefined, true); }
   updateParticles(g.parts, dt);
   g.draw();
   drawParticles(g.parts);
@@ -509,7 +570,7 @@ function onGameKey(e) {
   if (e.key === 'Escape') { e.preventDefault(); showSetup(); return; }
   if (e.ctrlKey || e.altKey || e.metaKey) return;
   if (g.over) {
-    if (e.key === 'Enter' && g.overT > 0.4) { e.preventDefault(); startGame(g.type); }
+    if (e.key === 'Enter' && g.overT > 0.4) { e.preventDefault(); lesson ? runLesson(lessonIdx + 1) : startGame(g.type); }
     return;
   }
   if (e.key.length !== 1) return;
@@ -586,7 +647,7 @@ function drawGameOver(g) {
     ctx.fillText('🏆 Neuer Rekord!', W / 2, 370);
   }
   ctx.fillStyle = '#ccc'; ctx.font = '22px system-ui, sans-serif';
-  ctx.fillText('Enter = nochmal   ·   Esc = Einstellungen', W / 2, 440);
+  ctx.fillText(lesson ? 'Enter = nächste Lektion   ·   Esc = Kursübersicht' : 'Enter = nochmal   ·   Esc = Einstellungen', W / 2, 440);
 }
 
 /* ---- Ballon-Spiel ---- */
@@ -870,7 +931,7 @@ function laneX(l) { return ROAD_X + LANE_W * (l + 0.5); }
 class RaceGame {
   constructor(letters, opp) {
     this.wantsSpace = true;
-    this.text = generateText(parseInt($('raceLen').value) || 60);
+    this.text = generateText(lesson ? 20 : parseInt($('raceLen').value) || 60);
     this.trackLen = this.text.length * PX_PER_CHAR;
     this.pos = 0; this.err = false; this.parts = [];
     this.keys = 0; this.hits = 0; this.score = 0; this.t = 0; this.count = 3;
@@ -1275,6 +1336,113 @@ class ClimbGame {
     }
   }
 }
+
+/* ======================= Kurs ======================= */
+// Reihenfolge der Lektionen: [Art, Tasten, Titel]
+//   neu = neue Tasten lernen, leer = Leertaste, wdh = Wiederholung der neuen Tasten, paar = nur diese zwei Tasten,
+//   uebung = alle gelernten Tasten mit Schwerpunkt auf den neuen, alle = alle gelernten Tasten
+const KURS_PLAN = [
+  ['neu', 'fj', 'F + J'], ['leer', 'fj', 'Leertaste'], ['wdh', 'fj', 'Wiederholung F + J'],
+  ['neu', 'dk', 'D + K'], ['wdh', 'dk', 'Wiederholung D + K'], ['uebung', 'dk', 'Übung D + K'],
+  ['paar', 'fd', 'F + D'],
+  ['neu', 'sl', 'S + L'], ['wdh', 'sl', 'Wiederholung S + L'], ['uebung', 'sl', 'Übung S + L'],
+  ['neu', 'aö', 'A + Ö'], ['wdh', 'aö', 'Wiederholung A + Ö'],
+  ['alle', '', 'Die ersten 8 Tasten'],
+  ['neu', 'gh', 'G + H'], ['wdh', 'gh', 'Wiederholung G + H'], ['uebung', 'gh', 'Übung G + H'],
+  ['alle', '', 'Grundreihe wiederholen'],
+  ['neu', 'ru', 'R + U'], ['wdh', 'ru', 'Wiederholung R + U'], ['uebung', 'ru', 'Übung R + U'],
+  ['neu', 'ei', 'E + I'], ['wdh', 'ei', 'Wiederholung E + I'], ['uebung', 'ei', 'Übung E + I'],
+  ['neu', 'wo', 'W + O'], ['wdh', 'wo', 'Wiederholung W + O'], ['uebung', 'wo', 'Übung W + O'],
+  ['neu', 'qy', 'Q + Y'], ['wdh', 'qy', 'Wiederholung Q + Y'], ['uebung', 'qy', 'Übung Q + Y'],
+  ['neu', 'pt', 'P + T'], ['wdh', 'pt', 'Wiederholung P + T'], ['uebung', 'pt', 'Übung P + T'],
+];
+const KURS_SPIELE = ['balloon', 'lava', 'race', 'climb'];
+const KURS = (() => {
+  const out = [];
+  let learned = '';
+  for (const [art, focus, title] of KURS_PLAN) {
+    if (art === 'neu') learned += focus;
+    out.push({ art, focus, title, keys: learned });
+    // Nach jeder Wiederholung neuer Tasten: alle bisherigen Tasten wiederholen, danach ein Zufallsspiel
+    if (art === 'wdh') {
+      if (learned !== focus) out.push({ art: 'alle', focus: '', title: 'Wiederholung: alle Tasten', keys: learned });
+      out.push({ art: 'spiel', focus: '', title: '🎲 Zufallsspiel', keys: learned });
+    }
+  }
+  return out;
+})();
+let lesson = null, lessonIdx = -1, lessonPassed = false;
+
+function kursData() {
+  try { return JSON.parse(localStorage.getItem('tipplerner-kurs')) || { done: 0, best: {} }; } catch (e) { return { done: 0, best: {} }; }
+}
+function kursMark(i, acc, passed) {
+  const d = kursData();
+  if (acc !== undefined) d.best[i] = Math.max(d.best[i] || 0, acc);
+  if (passed && i === d.done) d.done = i + 1;
+  try { localStorage.setItem('tipplerner-kurs', JSON.stringify(d)); } catch (e) {}
+}
+
+// Zufällige Buchstabengruppen; mit must muss jede Gruppe mindestens einen dieser Buchstaben enthalten
+function groups(letters, n, minLen, maxLen, must) {
+  const out = [];
+  while (out.length < n) {
+    const len = minLen + Math.floor(Math.random() * (maxLen - minLen + 1));
+    let w = '';
+    for (let i = 0; i < len; i++) w += pick(letters);
+    if (must && ![...w].some(c => must.includes(c))) continue;
+    if (out.length && out[out.length - 1] === w) continue;
+    out.push(w);
+  }
+  return out;
+}
+
+function lessonText(l) {
+  const focus = [...l.focus], all = [...l.keys];
+  if (l.art === 'neu') return groups(focus, 18, 2, 4).join(' ');
+  if (l.art === 'leer') return groups(focus, 30, 1, 2).join(' ');
+  if (l.art === 'wdh' || l.art === 'paar') return groups(focus, 24, 2, 5).join(' ');
+  const must = l.art === 'uebung' ? l.focus : null;
+  const words = matchingWords(new Set(all)).filter(w => !must || [...w].some(c => must.includes(c)));
+  return groups(all, 25, 2, 5, must)
+    .map(w => words.length >= 15 || (words.length && Math.random() < 0.5) ? pick(words) : w).join(' ');
+}
+
+function runLesson(i) {
+  if (i >= KURS.length) { showSetup(); return; }
+  lessonIdx = i; lesson = KURS[i]; lessonPassed = false;
+  if (lesson.art === 'spiel') startGame(pick(KURS_SPIELE)); else start();
+}
+
+function again() {
+  if (!lesson) return start();
+  runLesson(lessonPassed ? lessonIdx + 1 : lessonIdx);
+}
+
+function renderKurs() {
+  const d = kursData(), n = KURS.length, done = Math.min(d.done, n);
+  $('kursInfo').textContent = done >= n ? '🏆 Ganzer Kurs geschafft!' : `${done} von ${n} Lektionen geschafft`;
+  $('kursBar').style.width = (done / n * 100) + '%';
+  $('lessons').innerHTML = KURS.map((l, i) => {
+    const st = i < done ? 'done' : i === done ? 'cur' : 'locked';
+    const icon = st === 'locked' ? '🔒' : st === 'done' ? '✅' : '▶';
+    const pct = d.best[i] != null ? `<span class="pct">${String(d.best[i]).replace('.', ',')} %</span>` : '';
+    return `<button class="lesson ${st}" data-i="${i}"${st === 'locked' ? ' disabled' : ''}><span class="nr">${i + 1}</span>${icon} ${l.title}${pct}</button>`;
+  }).join('');
+  const cur = $('lessons').querySelector('.cur');
+  if (cur) $('lessons').scrollTop = cur.offsetTop - 60;
+  if (getMode() === 'kurs') $('startBtn').textContent = done < n ? `Lektion ${done + 1} starten ▶` : 'Nochmal von vorne ▶';
+}
+
+$('lessons').addEventListener('click', e => {
+  const b = e.target.closest('.lesson');
+  if (b && !b.disabled) runLesson(+b.dataset.i);
+});
+$('kursReset').addEventListener('click', () => {
+  if (!confirm('Willst du deinen Kurs-Fortschritt wirklich löschen?')) return;
+  try { localStorage.removeItem('tipplerner-kurs'); } catch (e) {}
+  renderKurs();
+});
 
 loadSettings();
 updateModeInfo();
