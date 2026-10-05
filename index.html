@@ -68,6 +68,50 @@
   .lesson.cur { border: 2px solid var(--cur); background: #e8f0fb; font-weight: 600; }
   .lesson:disabled { opacity: .45; cursor: not-allowed; background: #fff; }
   .lesson-head { font-weight: 600; color: var(--cur); margin-bottom: 12px; }
+
+  /* ---------- Animationen ---------- */
+  @keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+  @keyframes pop { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: none; } }
+  @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(21,101,192,.4); } 50% { box-shadow: 0 0 0 7px rgba(21,101,192,0); } }
+  @keyframes keypop { 0% { transform: scale(1); } 40% { transform: scale(.85); } 100% { transform: scale(1); } }
+  @keyframes shake { 0%, 100% { transform: none; } 20% { transform: translateX(-6px); } 40% { transform: translateX(5px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(2px); } }
+  @keyframes badflash { from { background: #ff8a80; } }
+  @keyframes typed { from { transform: translateY(-4px); } to { transform: none; } }
+  .panel:not(.hidden) { animation: rise .4s cubic-bezier(.2,.8,.2,1); }
+  .lessons .lesson { animation: pop .35s cubic-bezier(.2,.8,.2,1) both; animation-delay: calc(var(--i) * 12ms);
+    transition: transform .15s, box-shadow .15s; }
+  .lessons .lesson.cur { animation: pop .35s cubic-bezier(.2,.8,.2,1) both, pulse 2s ease-in-out infinite;
+    animation-delay: calc(var(--i) * 12ms), 1s; }
+  .lesson:not(:disabled):hover { transform: translateY(-2px); box-shadow: 0 4px 10px #0001; }
+  .kurs-bar div { width: 0; transition: width .9s cubic-bezier(.2,.8,.2,1); }
+  .kb .k { position: relative; transition: transform .15s, opacity .25s, box-shadow .2s; }
+  .kb .k.next { transform: translateY(-2px); }
+  .kb .k.press { animation: keypop .18s ease-out; }
+  .kb .k.press-bad { animation: shake .3s, badflash .45s; }
+  .kb .k.focus { opacity: 1; font-weight: 700; animation: pulse 1.6s ease-in-out infinite; }
+  .kb .k.bump::after { content: ''; position: absolute; bottom: 5px; left: 50%; width: 12px; margin-left: -6px; height: 2px;
+    border-radius: 2px; background: currentColor; opacity: .6; }
+  #text .just { display: inline-block; animation: typed .15s ease-out; }
+  #text .cursor.wrong { display: inline-block; animation: shake .25s; }
+  #result .big div { animation: pop .5s cubic-bezier(.2,.8,.2,1) both; }
+  #result .big div + div { animation-delay: .12s; }
+  #rTitle.shake { animation: shake .45s; }
+  .confetti { position: fixed; inset: 0; pointer-events: none; z-index: 100; }
+
+  /* ---------- Erklärung vor neuen Tasten ---------- */
+  .intro-title { margin: 0 0 10px; }
+  #introText p { line-height: 1.55; margin: 0 0 10px; max-width: 700px; }
+  .intro-kb { position: relative; margin: 22px 0 34px; }
+  .intro-kb .k.bump::after { height: 3px; opacity: .9; }
+  .finger { position: absolute; left: 0; top: 0; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%;
+    background: rgba(21,101,192,.2); border: 2px solid var(--cur); pointer-events: none; }
+  .finger.ghost { border-color: #0002; background: #0000000a; }
+  .finger.pulse { animation: pulse 1.4s ease-in-out infinite; }
+  .finger span { position: absolute; top: 36px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: .72rem;
+    font-weight: 700; color: #fff; background: var(--cur); padding: 1px 7px; border-radius: 99px; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  }
   #cv { width: 100%; display: block; border-radius: 8px; background: #000; }
   @media (max-width: 600px) { .kb .k { width: 26px; height: 32px; font-size: .8rem; } .kb .space { width: 160px; } #text { font-size: 1.3rem; line-height: 2rem; } }
 </style>
@@ -143,6 +187,15 @@
       <div style="flex:0 0 auto"><button class="primary" id="startBtn">Start ▶</button></div>
     </div>
     <div class="hint" id="modeInfo"></div>
+  </section>
+
+  <section class="panel hidden" id="intro">
+    <div class="lesson-head" id="introHead"></div>
+    <h2 class="intro-title" id="introTitle"></h2>
+    <div id="introText"></div>
+    <div class="kb intro-kb" id="introKb"></div>
+    <button class="primary" id="introGo">Los geht's (Enter)</button>
+    <button id="introBack">Kursübersicht</button>
   </section>
 
   <section class="panel hidden" id="game">
@@ -320,29 +373,43 @@ function loadSettings() {
   } catch (e) {}
 }
 
-function buildKeyboard() {
-  const kb = $('kb');
+// focus = Tasten, die gerade neu sind und leicht pulsieren
+function fillKeyboard(kb, on, focus) {
   kb.innerHTML = '';
-  kb.classList.toggle('hidden', !$('showKb').checked);
   for (const row of KB_ROWS) {
     const r = document.createElement('div'); r.className = 'r';
     for (const c of row) {
       const k = document.createElement('div');
-      k.className = `k f${FINGER[c] || 9}` + (allowed.has(c) ? ' on' : '') + (HOME.has(c) ? ' home' : '');
+      k.className = `k f${FINGER[c] || 9}` + (on.has(c) ? ' on' : '') + (HOME.has(c) ? ' home' : '')
+        + (c === 'f' || c === 'j' ? ' bump' : '') + (focus.includes(c) ? ' focus' : '');
       k.dataset.key = c; k.textContent = c;
       r.appendChild(k);
     }
     kb.appendChild(r);
   }
   const r = document.createElement('div'); r.className = 'r';
-  const sp = document.createElement('div'); sp.className = 'k space f9 on'; sp.dataset.key = ' '; sp.textContent = 'Leertaste';
+  const sp = document.createElement('div'); sp.className = 'k space f9 on' + (focus.includes(' ') ? ' focus' : '');
+  sp.dataset.key = ' '; sp.textContent = 'Leertaste';
   r.appendChild(sp); kb.appendChild(r);
 }
 
+function buildKeyboard() {
+  $('kb').classList.toggle('hidden', !$('showKb').checked);
+  fillKeyboard($('kb'), allowed, lesson ? focusOf(lesson) : '');
+}
+
+function pressKey(ch, ok) {
+  const el = document.querySelector(`#kb [data-key="${CSS.escape(ch)}"]`);
+  if (!el) return;
+  el.classList.remove('press', 'press-bad');
+  void el.offsetWidth; // Animation neu starten
+  el.classList.add(ok ? 'press' : 'press-bad');
+}
+
 function highlightNext() {
-  document.querySelectorAll('.kb .next').forEach(e => e.classList.remove('next'));
+  document.querySelectorAll('#kb .next').forEach(e => e.classList.remove('next'));
   if (pos < target.length) {
-    const el = document.querySelector(`.kb [data-key="${CSS.escape(target[pos])}"]`);
+    const el = document.querySelector(`#kb [data-key="${CSS.escape(target[pos])}"]`);
     if (el) el.classList.add('next');
   }
 }
@@ -354,6 +421,7 @@ function render() {
     const ch = target[i] === ' ' ? '&nbsp;' : target[i];
     let cls = i < pos ? (states[i] ? 'done' : 'wrong') : (i === pos ? 'cursor' : 'todo');
     if (i === pos && errorsAt.has(i)) cls = 'cursor wrong';
+    if (i === pos - 1 && states[i]) cls += ' just';
     if (target[i] === ' ') cls += ' space';
     html += `<span class="${cls}">${ch}</span>`;
     if (target[i] === ' ') html += '<wbr>';
@@ -392,6 +460,7 @@ function start() {
   buildKeyboard();
   stopGame();
   $('arcade').classList.add('hidden');
+  $('intro').classList.add('hidden');
   $('setup').classList.add('hidden');
   $('result').classList.add('hidden');
   $('game').classList.remove('hidden');
@@ -402,9 +471,9 @@ function finish() {
   running = false;
   clearInterval(timer);
   const sec = elapsedSec();
-  $('rWpm').firstChild.textContent = wpm();
+  countUp($('rWpm'), wpm(), v => Math.round(v));
   recordWpm(wpm());
-  $('rAcc').firstChild.textContent = accuracy().toString().replace('.', ',');
+  countUp($('rAcc'), accuracy(), v => (Math.round(v * 10) / 10).toString().replace('.', ','));
   const words = target.split(' ').length;
   $('rDetail').textContent =
     `${words} Wörter · ${target.length} Zeichen in ${sec.toFixed(1)} s · ` +
@@ -424,9 +493,50 @@ function finish() {
       : last ? '🏆 Wow, du hast den ganzen Kurs geschafft!' : `Als Nächstes: ${KURS[lessonIdx + 1].title}`;
     $('againBtn').textContent = lessonPassed ? (last ? 'Zur Kursübersicht (Enter)' : 'Weiter (Enter)') : 'Nochmal (Enter)';
     $('backBtn').textContent = 'Kursübersicht';
+    if (lessonPassed) setTimeout(confetti, 250);
   }
   $('game').classList.add('hidden');
   $('result').classList.remove('hidden');
+  $('rTitle').classList.remove('shake');
+  if (lesson && !lessonPassed) { void $('rTitle').offsetWidth; $('rTitle').classList.add('shake'); }
+}
+
+// Zahl von 0 hochzählen lassen
+function countUp(el, to, fmt) {
+  const node = el.firstChild, t0 = performance.now(), dur = 800;
+  if (reducedMotion()) { node.textContent = fmt(to); return; }
+  const step = now => {
+    const k = Math.min(1, (now - t0) / dur);
+    node.textContent = fmt(to * (1 - Math.pow(1 - k, 3)));
+    if (k < 1) requestAnimationFrame(step);
+  };
+  node.textContent = fmt(0);
+  requestAnimationFrame(step);
+}
+function reducedMotion() { return matchMedia('(prefers-reduced-motion: reduce)').matches; }
+
+function confetti() {
+  if (reducedMotion()) return;
+  const c = document.createElement('canvas');
+  c.className = 'confetti'; c.width = innerWidth; c.height = innerHeight;
+  document.body.appendChild(c);
+  const x = c.getContext('2d'), cols = ['#e53935', '#1e88e5', '#43a047', '#fb8c00', '#8e24aa', '#fdd835'];
+  const ps = Array.from({ length: 150 }, () => ({
+    x: c.width / 2, y: c.height * 0.35, vx: (Math.random() - 0.5) * 16, vy: -Math.random() * 14 - 4,
+    r: Math.random() * 6.3, vr: (Math.random() - 0.5) * 0.4, w: 6 + Math.random() * 6, h: 4 + Math.random() * 4, col: pick(cols)
+  }));
+  const t0 = performance.now();
+  const frame = now => {
+    const t = (now - t0) / 1000;
+    x.clearRect(0, 0, c.width, c.height);
+    for (const p of ps) {
+      p.vy += 0.35; p.vx *= 0.99; p.x += p.vx; p.y += p.vy; p.r += p.vr;
+      x.save(); x.globalAlpha = Math.max(0, 1 - t / 2.2); x.translate(p.x, p.y); x.rotate(p.r);
+      x.fillStyle = p.col; x.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); x.restore();
+    }
+    if (t < 2.2) requestAnimationFrame(frame); else c.remove();
+  };
+  requestAnimationFrame(frame);
 }
 
 function showSetup() {
@@ -434,6 +544,7 @@ function showSetup() {
   running = false; clearInterval(timer);
   stopGame();
   $('arcade').classList.add('hidden');
+  $('intro').classList.add('hidden');
   $('game').classList.add('hidden');
   $('result').classList.add('hidden');
   $('setup').classList.remove('hidden');
@@ -443,6 +554,11 @@ function showSetup() {
 
 document.addEventListener('keydown', e => {
   if (arcade.game) { onGameKey(e); return; }
+  if (!$('intro').classList.contains('hidden')) {
+    if (e.key === 'Enter') { e.preventDefault(); start(); }
+    else if (e.key === 'Escape') { e.preventDefault(); showSetup(); }
+    return;
+  }
   const resultVisible = !$('result').classList.contains('hidden');
   if (resultVisible && e.key === 'Enter') { e.preventDefault(); again(); return; }
   if (!running) return;
@@ -463,6 +579,7 @@ document.addEventListener('keydown', e => {
   }
   const typed = e.key.toLowerCase();
   const expected = target[pos];
+  pressKey(typed, typed === expected);
   keystrokes++;
   if (typed === expected) {
     correctStrokes++;
@@ -526,7 +643,7 @@ function startGame(type) {
   saveSettings();
   running = false; clearInterval(timer);
   stopGame();
-  ['setup', 'game', 'result'].forEach(id => $(id).classList.add('hidden'));
+  ['setup', 'intro', 'game', 'result'].forEach(id => $(id).classList.add('hidden'));
   $('arcade').classList.remove('hidden');
   $('arcadeHint').textContent = {
     balloon: 'Tippe die Buchstaben in den Ballons, bevor sie auf die Spieße fallen!',
@@ -1408,26 +1525,140 @@ function lessonText(l) {
     .map(w => words.length >= 15 || (words.length && Math.random() < 0.5) ? pick(words) : w).join(' ');
 }
 
-function runLesson(i) {
+// retry = Lektion wird wiederholt, dann ohne Erklärung direkt los
+function runLesson(i, retry) {
   if (i >= KURS.length) { showSetup(); return; }
   lessonIdx = i; lesson = KURS[i]; lessonPassed = false;
-  if (lesson.art === 'spiel') startGame(pick(KURS_SPIELE)); else start();
+  if (lesson.art === 'spiel') startGame(pick(KURS_SPIELE));
+  else if (!retry && introOf(lesson)) showIntro();
+  else start();
 }
 
 function again() {
   if (!lesson) return start();
-  runLesson(lessonPassed ? lessonIdx + 1 : lessonIdx);
+  runLesson(lessonPassed ? lessonIdx + 1 : lessonIdx, !lessonPassed);
 }
+
+function focusOf(l) { return l.art === 'leer' ? ' ' : l.focus; }
+
+/* ---- Erklärung vor neuen Tasten ---- */
+const GRUND = 'Lege deine Finger auf die Grundstellung – ertaste dafür F und J an den kleinen Erhebungen.';
+const ZURUECK = 'Nach jedem Tastendruck geht der Finger sofort zurück auf seinen Platz.';
+const INTRO = {
+  fj: ['Willkommen! Die Grundstellung', [
+    'Beim 10-Finger-Tippen hat jeder Finger seine eigenen Tasten – und du schaust dabei <b>nicht</b> auf die Tastatur. '
+      + 'Damit das klappt, haben deine Finger einen festen Startplatz: die <b>Grundstellung</b>.',
+    'Fühl mal mit den Fingern über die Tasten <b>F</b> und <b>J</b>: Dort gibt es kleine <b>Erhebungen</b> (kleine Striche). '
+      + 'So findest du die beiden Tasten blind – ganz ohne hinzuschauen!',
+    'Lege deinen <b>linken Zeigefinger auf F</b> und deinen <b>rechten Zeigefinger auf J</b>. Die anderen Finger legst du daneben: '
+      + 'links auf A S D, rechts auf K L Ö. Die Daumen ruhen auf der Leertaste.',
+    'In dieser Lektion übst du nur F und J. Wenn deine Finger mal verrutschen: einfach wieder F und J ertasten.']],
+  leer: ['Die Leertaste', [
+    'Die <b>Leertaste</b> drückst du mit dem <b>Daumen</b> – ob links oder rechts, ist egal. '
+      + 'Die anderen Finger bleiben dabei auf der Grundstellung liegen.',
+    'Ertaste wieder F und J an den kleinen Erhebungen, dann geht’s los: Jetzt kommen zwischen den Buchstaben Leerzeichen.']],
+  dk: ['Neue Tasten: D und K', [GRUND,
+    'D und K drückst du mit den <b>Mittelfingern</b>: <b>D mit links, K mit rechts</b>. Sie liegen direkt neben deinen Zeigefingern auf F und J.']],
+  sl: ['Neue Tasten: S und L', [GRUND,
+    'S und L drückst du mit den <b>Ringfingern</b>: <b>S mit links, L mit rechts</b>. Sie liegen direkt neben deinen Mittelfingern.']],
+  'aö': ['Neue Tasten: A und Ö', [GRUND,
+    'A und Ö drückst du mit den <b>kleinen Fingern</b>: <b>A ganz links, Ö rechts</b>. Jetzt liegen alle acht Finger auf ihren Tasten!']],
+  gh: ['Neue Tasten: G und H', [GRUND,
+    'G und H liegen in der Mitte zwischen deinen Händen. Dein <b>linker Zeigefinger</b> rutscht von F einen Schritt nach rechts zum <b>G</b>, '
+      + 'dein <b>rechter Zeigefinger</b> von J einen Schritt nach links zum <b>H</b>.', ZURUECK]],
+  ru: ['Neue Tasten: R und U', [GRUND,
+    'R und U liegen eine Reihe höher. Dein <b>linker Zeigefinger</b> greift von F schräg nach oben zum <b>R</b>, '
+      + 'dein <b>rechter Zeigefinger</b> von J nach oben zum <b>U</b>.', ZURUECK]],
+  ei: ['Neue Tasten: E und I', [GRUND,
+    'E und I liegen über D und K. Die <b>Mittelfinger</b> greifen nach oben: <b>links zum E, rechts zum I</b>.', ZURUECK]],
+  wo: ['Neue Tasten: W und O', [GRUND,
+    'W und O liegen über S und L. Die <b>Ringfinger</b> greifen nach oben: <b>links zum W, rechts zum O</b>.', ZURUECK]],
+  qy: ['Neue Tasten: Q und Y', [GRUND,
+    'Beide Tasten drückt dein <b>linker kleiner Finger</b>: <b>Q</b> liegt oben über dem A, <b>Y</b> unten links unter dem A.', ZURUECK]],
+  pt: ['Neue Tasten: P und T', [GRUND,
+    '<b>P</b> drückt dein <b>rechter kleiner Finger</b>: von Ö schräg nach oben. '
+      + '<b>T</b> drückt dein <b>linker Zeigefinger</b>: von F nach oben rechts, direkt neben dem R.', ZURUECK]],
+};
+function introOf(l) { return l.art === 'leer' ? INTRO.leer : l.art === 'neu' ? INTRO[l.focus] : null; }
+
+function showIntro() {
+  const [title, text] = introOf(lesson);
+  running = false; clearInterval(timer);
+  stopGame();
+  ['setup', 'game', 'result', 'arcade'].forEach(id => $(id).classList.add('hidden'));
+  $('introHead').textContent = `🎓 Lektion ${lessonIdx + 1} von ${KURS.length}`;
+  $('introTitle').textContent = title;
+  $('introText').innerHTML = text.map(t => `<p>${t}</p>`).join('');
+  $('intro').classList.remove('hidden');
+  fillKeyboard($('introKb'), new Set(lesson.keys), focusOf(lesson));
+  layoutIntro();
+  document.activeElement && document.activeElement.blur();
+}
+
+const FINGER_HOME = { 1: 'a', 2: 's', 3: 'd', 4: 'f', 5: 'j', 6: 'k', 7: 'l', 8: 'ö' };
+const FINGER_NAME = { 1: 'kleiner Finger', 2: 'Ringfinger', 3: 'Mittelfinger', 4: 'Zeigefinger' };
+
+// Finger als Kreise auf die Tastatur legen; Finger mit neuen Tasten greifen hin und zurück
+function layoutIntro() {
+  const kb = $('introKb');
+  if (!lesson || $('intro').classList.contains('hidden')) return;
+  kb.querySelectorAll('.finger').forEach(e => e.remove());
+  const base = kb.getBoundingClientRect();
+  const center = el => { const r = el.getBoundingClientRect(); return [r.left - base.left + r.width / 2, r.top - base.top + r.height / 2]; };
+  const at = c => center(kb.querySelector(`[data-key="${CSS.escape(c)}"]`));
+  const T = (x, y) => `translate(${x}px, ${y}px)`;
+  const dot = (x, y, label, ghost) => {
+    const d = document.createElement('div');
+    d.className = 'finger' + (ghost ? ' ghost' : '');
+    d.style.transform = T(x, y);
+    if (label) d.innerHTML = `<span>${label}</span>`;
+    kb.appendChild(d);
+    return d;
+  };
+  const still = reducedMotion();
+  const first = lesson.art === 'neu' && lesson.focus === 'fj';
+  const focus = lesson.art === 'leer' ? '' : lesson.focus;
+
+  for (let f = 1; f <= 8; f++) {
+    const [hx, hy] = at(FINGER_HOME[f]);
+    const keys = [...focus].filter(c => FINGER[c] === f);
+    const label = keys.length ? `${f <= 4 ? 'linker' : 'rechter'} ${FINGER_NAME[f <= 4 ? f : 9 - f]}` : '';
+    const d = dot(hx, hy, label, !keys.length && !first);
+    // Ganz am Anfang setzen sich die Finger nacheinander auf die Grundstellung
+    if (first && !still)
+      d.animate([{ opacity: 0, transform: T(hx, hy - 50) }, { opacity: 1, transform: T(hx, hy) }],
+        { duration: 550, delay: 300 + f * 120, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' });
+    if (!keys.length) continue;
+    const targets = keys.filter(c => c !== FINGER_HOME[f]);
+    if (!targets.length || still) { d.classList.add('pulse'); continue; }
+    const ease = 'cubic-bezier(.45,0,.25,1)', seg = 1 / targets.length, frames = [{ transform: T(hx, hy), offset: 0, easing: ease }];
+    targets.forEach((c, i) => {
+      const [tx, ty] = at(c), o = i * seg;
+      frames.push({ transform: T(hx, hy), offset: o + seg * 0.2, easing: ease }, { transform: T(tx, ty), offset: o + seg * 0.42, easing: ease },
+                  { transform: T(tx, ty), offset: o + seg * 0.68, easing: ease }, { transform: T(hx, hy), offset: o + seg * 0.9, easing: ease });
+    });
+    frames.push({ transform: T(hx, hy), offset: 1 });
+    d.animate(frames, { duration: 2600 * targets.length, iterations: Infinity });
+  }
+  if (lesson.art === 'leer') {
+    const sp = kb.querySelector('.space'), [sx, sy] = center(sp), w = sp.getBoundingClientRect().width;
+    dot(sx - w * 0.2, sy, 'Daumen').classList.add('pulse');
+    dot(sx + w * 0.2, sy, 'Daumen').classList.add('pulse');
+  }
+}
+window.addEventListener('resize', layoutIntro);
+$('introGo').addEventListener('click', start);
+$('introBack').addEventListener('click', showSetup);
 
 function renderKurs() {
   const d = kursData(), n = KURS.length, done = Math.min(d.done, n);
   $('kursInfo').textContent = done >= n ? '🏆 Ganzer Kurs geschafft!' : `${done} von ${n} Lektionen geschafft`;
-  $('kursBar').style.width = (done / n * 100) + '%';
+  requestAnimationFrame(() => requestAnimationFrame(() => { $('kursBar').style.width = (done / n * 100) + '%'; }));
   $('lessons').innerHTML = KURS.map((l, i) => {
     const st = i < done ? 'done' : i === done ? 'cur' : 'locked';
     const icon = st === 'locked' ? '🔒' : st === 'done' ? '✅' : '▶';
     const pct = d.best[i] != null ? `<span class="pct">${String(d.best[i]).replace('.', ',')} %</span>` : '';
-    return `<button class="lesson ${st}" data-i="${i}"${st === 'locked' ? ' disabled' : ''}><span class="nr">${i + 1}</span>${icon} ${l.title}${pct}</button>`;
+    return `<button class="lesson ${st}" style="--i:${Math.min(i, 40)}" data-i="${i}"${st === 'locked' ? ' disabled' : ''}><span class="nr">${i + 1}</span>${icon} ${l.title}${pct}</button>`;
   }).join('');
   const cur = $('lessons').querySelector('.cur');
   if (cur) $('lessons').scrollTop = cur.offsetTop - 60;
